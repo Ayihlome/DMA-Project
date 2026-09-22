@@ -1,0 +1,18 @@
+class RestockRecommendation {
+  constructor(product, urgency, quantity, supplier, status, explanation) {
+    this.product = product;
+    this.urgency = urgency;
+    this.quantity = quantity;
+    this.supplier = supplier;
+    this.status = status;
+    this.explanation;
+  }
+}
+
+class RestockEngine {
+  calcUrgency() {}
+
+  selectSupplier() {}
+
+  generateRecommendation() {} //returns Restock Recommendations
+}
