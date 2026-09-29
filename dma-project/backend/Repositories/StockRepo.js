@@ -29,6 +29,10 @@ class StockRepository {
       )
       .run(quantity, productId);
   }
+
+  getStockoutEventCount(productID, window) {}
+
+  getAverageStockHeld(productID, window) {}
 }
 
 module.exports = StockRepository;
