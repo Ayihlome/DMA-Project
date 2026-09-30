@@ -1,15 +1,29 @@
 import React from 'react'
-import { View, Text, StyleSheet } from 'react-native'
+import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import { colors, spacing, type } from '../../theme/theme'
+import { useAuth } from '../../providers/AuthProvider'
 
 interface Props {
   screenLabel: string
 }
 
+function confirmSignOut(signOut: () => void) {
+  if (Platform.OS === 'web') {
+    // Alert buttons aren't supported on web
+    if (window.confirm('Sign out of Bongani Spaza?')) signOut()
+    return
+  }
+  Alert.alert('Sign out', 'Sign out of Bongani Spaza?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: signOut },
+  ])
+}
+
 export default function AppHeader({ screenLabel }: Props) {
   const insets = useSafeAreaInsets()
+  const { signOut } = useAuth()
 
   return (
     <View style={[styles.container, { paddingTop: insets.top }]}>
@@ -24,9 +38,14 @@ export default function AppHeader({ screenLabel }: Props) {
           </View>
           <Text style={styles.screenLabel}>{screenLabel}</Text>
         </View>
-        <View style={styles.avatar}>
+        <TouchableOpacity
+          style={styles.avatar}
+          onPress={() => confirmSignOut(signOut)}
+          activeOpacity={0.7}
+          accessibilityLabel="Sign out"
+        >
           <MaterialIcons name="person" size={18} color={colors.onPrimary} />
-        </View>
+        </TouchableOpacity>
       </View>
     </View>
   )
