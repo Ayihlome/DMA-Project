@@ -1,21 +1,18 @@
+db = require("db")
+
 class RecipeRepository {
   constructor(database) {
     this.database = database;
   }
 
-  getComponentsByParentProductId(productId) {
-    return this.database
-      .prepare(
-        `
-                SELECT
-                    parent_product_id,
-                    component_product_id,
-                    quantity_required
-                FROM recipe_components
-                WHERE parent_product_id = ?
-            `,
-      )
-      .all(productId);
+  getComponentsByParentProductId(productID) {
+    const { rows } = await db.execute(
+      `select * from recipe_components where parent_product_id = ? and is_deleted = 0`,
+      [productID]
+    );
+    // empty array is a valid response for the RecipeEngine since it decides what it means (no recipe needed or recipe missing) based on the isComposite flag
+
+    return rows;
   }
 }
 
