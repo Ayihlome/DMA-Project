@@ -1,8 +1,7 @@
 import React, { useState } from 'react'
 import { Text } from 'react-native'
-import { router } from 'expo-router'
+import { Link, router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
-import { REAL_AUTH, useAuth } from '../../providers/AuthProvider'
 import { AuthLayout, Field, SubmitButton } from './AuthForm'
 import { styles } from './styles'
 
@@ -11,15 +10,10 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
-  const { enterApp } = useAuth()
 
   async function signIn() {
     if (!email.trim() || !password) {
       setError('Enter your email and password.')
-      return
-    }
-    if (!REAL_AUTH) {
-      enterApp()
       return
     }
     setLoading(true)
@@ -66,6 +60,12 @@ export default function SignInScreen() {
         textContentType="password"
         onSubmitEditing={signIn}
       />
+      <Link
+        href={{ pathname: '/forgot-password', params: { email: email.trim() } }}
+        style={[styles.switchLink, { alignSelf: 'flex-end' }]}
+      >
+        Forgot password?
+      </Link>
       <SubmitButton label="Sign in" loading={loading} onPress={signIn} />
     </AuthLayout>
   )

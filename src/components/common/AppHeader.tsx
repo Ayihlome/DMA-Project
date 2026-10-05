@@ -3,21 +3,30 @@ import { View, Text, StyleSheet, TouchableOpacity, Alert, Platform } from 'react
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import { colors, spacing, type } from '../../theme/theme'
-import { useAuth } from '../../providers/AuthProvider'
+import { useAuth, type AuthState } from '../../providers/AuthProvider'
 
 interface Props {
   screenLabel: string
 }
 
-function confirmSignOut(signOut: () => void) {
+async function signOutOrExplain(signOut: AuthState['signOut']) {
+  const { error } = await signOut()
+  if (!error) return
+  // Sign-out needs the internet to end the session on the server
+  const message = `Couldn't sign out: ${error.message}. Check your connection and try again.`
+  if (Platform.OS === 'web') window.alert(message)
+  else Alert.alert('Sign out failed', message)
+}
+
+function confirmSignOut(signOut: AuthState['signOut']) {
   if (Platform.OS === 'web') {
     // Alert buttons aren't supported on web
-    if (window.confirm('Sign out of Bongani Spaza?')) signOut()
+    if (window.confirm('Sign out of Bongani Spaza?')) signOutOrExplain(signOut)
     return
   }
   Alert.alert('Sign out', 'Sign out of Bongani Spaza?', [
     { text: 'Cancel', style: 'cancel' },
-    { text: 'Sign out', style: 'destructive', onPress: signOut },
+    { text: 'Sign out', style: 'destructive', onPress: () => signOutOrExplain(signOut) },
   ])
 }
 
