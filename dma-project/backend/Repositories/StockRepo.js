@@ -51,4 +51,4 @@ class StockRepository {
   }
 }
 
-module.exports = StockRepository;
+export default StockRepository;

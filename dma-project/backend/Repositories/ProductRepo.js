@@ -1,5 +1,5 @@
-db = require("db");
-enqueueSync = require("syncQueue.js");
+import { db } from "../data/local/db";
+import { enqueueSync } from "../data/local/syncQueue";
 
 class ProductRepo {
   async getByID(productID) {

@@ -83,3 +83,5 @@ class KPICalculator {
     return snapshot;
   }
 }
+
+export default KPICalculator;

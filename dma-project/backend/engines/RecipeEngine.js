@@ -81,3 +81,5 @@ class RecipeEngine {
     return stockItem.quantityOnHand >= quantity;
   }
 }
+
+export default RecipeEngine;

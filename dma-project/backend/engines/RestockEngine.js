@@ -28,7 +28,7 @@ class RestockEngine {
   }
 
   rankByUrgency(products) {
-    const urgencyOrder = { "Critical": 0, "Low Stock": 1, "OK": 2 };
+    const urgencyOrder = { Critical: 0, "Low Stock": 1, OK: 2 };
 
     const ranked = products.map((product) => ({
       product: product.product,
@@ -51,7 +51,7 @@ class RestockEngine {
     }
 
     const eligible = supplierPrices.filter(
-      (s) => !s.minOrderQty || s.minOrderQty <= requiredQuantity
+      (s) => !s.minOrderQty || s.minOrderQty <= requiredQuantity,
     );
 
     if (eligible.length === 0) {
@@ -76,14 +76,14 @@ class RestockEngine {
   checkBudget(cart, limit) {
     const total = cart.reduce(
       (sum, item) => sum + item.unitPrice * item.quantity,
-      0
+      0,
     );
     return roundCurrency(total) <= roundCurrency(limit);
   }
 
   getBudgetStatus(cart, limit) {
     const spent = roundCurrency(
-      cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0)
+      cart.reduce((sum, item) => sum + item.unitPrice * item.quantity, 0),
     );
     const remaining = roundCurrency(limit - spent);
     const percentUsed = limit > 0 ? roundCurrency((spent / limit) * 100) : 0;
@@ -102,7 +102,7 @@ class RestockEngine {
     supplierResult,
     recommendedQty,
     cart,
-    budgetLimit
+    budgetLimit,
   ) {
     const urgency = this.calcUrgency(kpiSnapshot);
     const { cheapest, comparisons } = supplierResult;
@@ -110,13 +110,13 @@ class RestockEngine {
     const explanationParts = [];
 
     explanationParts.push(
-      `${kpiSnapshot.daysRemaining} day(s) of stock remaining.`
+      `${kpiSnapshot.daysRemaining} day(s) of stock remaining.`,
     );
 
     const nextCheapest = comparisons.find((c) => !c.isCheapest);
     if (nextCheapest) {
       explanationParts.push(
-        `${cheapest.supplierName} is R${nextCheapest.priceDifference.toFixed(2)} cheaper per unit than ${nextCheapest.supplier.supplierName}.`
+        `${cheapest.supplierName} is R${nextCheapest.priceDifference.toFixed(2)} cheaper per unit than ${nextCheapest.supplier.supplierName}.`,
       );
     }
 
@@ -124,7 +124,7 @@ class RestockEngine {
     explanationParts.push(
       budgetStatus.withinBudget
         ? `Fits within your available restocking budget.`
-        : `Warning: this exceeds your available restocking budget.`
+        : `Warning: this exceeds your available restocking budget.`,
     );
 
     const explanation = explanationParts.join(" ");
@@ -135,9 +135,9 @@ class RestockEngine {
       recommendedQty,
       cheapest,
       budgetStatus.withinBudget ? "pending" : "over-budget",
-      explanation
+      explanation,
     );
   }
 }
 
-module.exports = RestockEngine;
+export default RestockEngine;

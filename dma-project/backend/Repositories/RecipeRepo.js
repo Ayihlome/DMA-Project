@@ -1,4 +1,4 @@
-db = require("db")
+import { db } from "../data/local/db";
 
 class RecipeRepository {
   constructor(database) {

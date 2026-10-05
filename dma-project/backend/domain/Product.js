@@ -1,8 +1,9 @@
 class Product {
-  constructor(productID, name, units, sellingPrice, type) {
+  constructor(productID, name, units, sellingPrice, category, type) {
     this.productID = productID;
     this.productName = name;
     this.sellingPrice = sellingPrice;
+    this.category = category;
     this.units = units;
     this.type = type; // is it a single product item or composite
     this.database;

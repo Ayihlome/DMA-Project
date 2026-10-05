@@ -1,4 +1,4 @@
-db = require("db.js");
+import { db } from "../data/local/db";
 
 class SaleRepo {
   async recordSale({

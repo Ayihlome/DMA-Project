@@ -15,6 +15,7 @@ export function runMigration() {
       unit text not null,
       is_composite integer not null default 0,
       selling_price real,
+      category text, 
       created_at text not null,
       updated_at text not null,
       is_deleted integer not null default 0
