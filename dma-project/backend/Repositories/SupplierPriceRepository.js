@@ -1,20 +1,18 @@
-class SupplierPriceRepository {
-  constructor(database) {
-    this.database = database; // this expects an expo-sqlite database instance
-  }
+import { db } from "../data/local/db";
 
+class SupplierPriceRepository {
   async getPricesByProductId(productId) {
-    return await this.database.getAllAsync(
-      `SELECT
+    return await db.execute(
+      `select
          sp.supplier_id,
          s.name AS supplier_name,
          sp.product_id,
          sp.unit_price,
          sp.min_order_qty
-       FROM supplier_prices sp
-       JOIN suppliers s ON sp.supplier_id = s.supplier_id
-       WHERE sp.product_id = ?`,
-      [productId]
+       from supplier_prices sp
+       join suppliers s ON sp.supplier_id = s.supplier_id
+       where sp.product_id = ?`,
+      [productId],
     );
   }
 }

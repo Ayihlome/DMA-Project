@@ -108,4 +108,21 @@ export function runMigration() {
       created_at text not null
     );
   `);
+
+  db.execute(
+    `create table if not exist suppliers (
+    name text primary key,
+    contact integer not null,
+    location text not null
+    );`,
+  );
+
+  db.execute(
+    `create table if not exist supplier_prices (
+    supplier text primary key,
+    product text not null,
+    unit_price integer not null,
+    minimum_order integer not null
+    );`,
+  );
 }

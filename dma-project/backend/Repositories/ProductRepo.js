@@ -1,7 +1,7 @@
 import { db } from "../data/local/db";
 import { enqueueSync } from "../data/local/syncqueue";
 
-class ProductRepo {
+class ProductRepository {
   async getByID(productID) {
     const { rows } = await db.execute(`select * from products where id = ?`, [
       productID,

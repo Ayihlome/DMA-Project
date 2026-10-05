@@ -1,6 +1,6 @@
 import { db } from "../data/local/db";
 import { enqueueSync } from "../data/local/syncqueue";
-class SaleRepo {
+class SaleRepository {
   async recordSale({
     saleID,
     ownerID,
