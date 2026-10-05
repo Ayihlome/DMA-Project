@@ -1,72 +1,62 @@
-import { colors } from '../../../theme/theme'
+// Sample data until the screen reads from Supabase
+
+export interface SupplierOption {
+  name: string
+  unitPrice: number
+}
 
 export interface RestockItem {
   id: number
   name: string
-  desc: string
-  cost: number
-  badge: string
-  badgeBg: string
-  badgeIcon: string
-  supplier: string
-  supplierPrice: string
-  suppliers: { name: string; price: string; diff?: string }[]
-  rationale: { icon: string; urgent: string; body: string }
+  qty: number
+  unit: string
+  packs: string
+  level: 'out-soon' | 'low'
+  suppliers: SupplierOption[] // cheapest first
+  why: string
 }
 
 export const ITEMS: RestockItem[] = [
   {
     id: 1,
-    name: 'White Bread 700g',
-    desc: '20 loaves (2 crates) recommended',
-    cost: 264,
-    badge: 'CRITICAL', badgeBg: colors.errorDefault, badgeIcon: 'warning',
-    supplier: 'Jumbo Cash & Carry', supplierPrice: 'R13.20/ea',
+    name: 'White bread 700g',
+    qty: 20,
+    unit: 'loaves',
+    packs: '2 crates',
+    level: 'out-soon',
     suppliers: [
-      { name: 'Jumbo Cash & Carry', price: 'R13.20/ea' },
-      { name: 'Devland Wholesale', price: 'R13.90/ea', diff: '+R14.00' },
+      { name: 'Jumbo Cash & Carry', unitPrice: 13.2 },
+      { name: 'Devland Wholesale', unitPrice: 13.9 },
     ],
-    rationale: {
-      icon: 'save_as',
-      urgent: '2 loaves left (~2h of stock before stockout)',
-      body: 'Projected daily turnover: 15 loaves. Jumbo is currently R0.70 cheaper per unit than Devland. Fits within your 10% daily emergency buffer.',
-    },
+    why: 'Only 2 loaves left and you sell about 15 a day, so you will run out in about 2 hours.',
   },
   {
     id: 2,
-    name: 'Fresh Milk 1L Sachet',
-    desc: '20 sachets (1 crate) recommended',
-    cost: 250,
-    badge: 'CRITICAL', badgeBg: colors.errorDefault, badgeIcon: 'warning',
-    supplier: 'Devland Wholesale', supplierPrice: 'R12.50/ea',
+    name: 'Full cream milk 1L',
+    qty: 20,
+    unit: 'sachets',
+    packs: '1 crate',
+    level: 'out-soon',
     suppliers: [
-      { name: 'Devland Wholesale', price: 'R12.50/ea' },
-      { name: 'Jumbo Cash & Carry', price: 'R12.95/ea', diff: '+R9.00' },
+      { name: 'Devland Wholesale', unitPrice: 12.5 },
+      { name: 'Jumbo Cash & Carry', unitPrice: 12.95 },
     ],
-    rationale: {
-      icon: 'local_fire_department',
-      urgent: 'High morning velocity item',
-      body: 'Only 3 sachets remaining in fridge. Devland offers lowest carton rate this week with guaranteed same-day delivery.',
-    },
+    why: 'Only 3 sachets left in the fridge. Milk sells fastest in the morning.',
   },
   {
     id: 3,
-    name: 'Sunflower Cooking Oil 750ml',
-    desc: '12 bottles (1 box case) recommended',
-    cost: 294,
-    badge: 'LOW STOCK', badgeBg: '#DD6B20', badgeIcon: 'flag',
-    supplier: 'Jumbo Cash & Carry', supplierPrice: 'R24.50/ea',
+    name: 'Sunflower oil 750ml',
+    qty: 12,
+    unit: 'bottles',
+    packs: '1 box',
+    level: 'low',
     suppliers: [
-      { name: 'Jumbo Cash & Carry', price: 'R24.50/ea' },
-      { name: 'Devland Wholesale', price: 'R25.80/ea', diff: '+R15.60' },
+      { name: 'Jumbo Cash & Carry', unitPrice: 24.5 },
+      { name: 'Devland Wholesale', unitPrice: 25.8 },
     ],
-    rationale: {
-      icon: 'inventory',
-      urgent: 'Kota fryer requirement',
-      body: 'Crucial fast-mover. 4 bottles remaining on shelf (~1.5 days run rate).',
-    },
+    why: '4 bottles left, enough for about a day and a half. You need it for frying kota chips.',
   },
 ]
 
-export const BASE_OVERHEAD = 1032
-
+// Stock bought every week regardless (cold drinks, airtime, cigarettes)
+export const REGULAR_STOCK = 1032

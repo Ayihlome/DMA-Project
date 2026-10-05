@@ -29,22 +29,16 @@ export default function AppHeader({ screenLabel }: Props) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.inner}>
         <View style={styles.left}>
-          <View style={styles.nameRow}>
-            <Text style={styles.shopName}>Bongani Spaza</Text>
-            <View style={styles.syncPill}>
-              <View style={styles.syncDot} />
-              <Text style={styles.syncText}>Synced</Text>
-            </View>
-          </View>
+          <Text style={styles.shopName}>Bongani Spaza</Text>
           <Text style={styles.screenLabel}>{screenLabel}</Text>
         </View>
         <TouchableOpacity
-          style={styles.avatar}
+          style={styles.signOut}
           onPress={() => confirmSignOut(signOut)}
           activeOpacity={0.7}
           accessibilityLabel="Sign out"
         >
-          <MaterialIcons name="person" size={18} color={colors.onPrimary} />
+          <MaterialIcons name="person" size={20} color={colors.primary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -53,37 +47,26 @@ export default function AppHeader({ screenLabel }: Props) {
 
 const styles = StyleSheet.create({
   container: {
-    backgroundColor: 'rgba(255,255,255,0.92)',
-    borderBottomWidth: StyleSheet.hairlineWidth,
-    borderBottomColor: colors.borderDefault,
+    backgroundColor: colors.bgBase,
   },
   inner: {
-    height: 56,
     paddingHorizontal: spacing.md,
+    paddingTop: spacing.xs,
+    paddingBottom: spacing.sm,
     flexDirection: 'row',
     alignItems: 'center',
     justifyContent: 'space-between',
   },
   left: { flex: 1, minWidth: 0 },
-  nameRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.xs },
-  shopName: { ...type.labelBold, color: colors.textPrimary },
-  syncPill: {
-    flexDirection: 'row',
-    alignItems: 'center',
-    gap: 4,
-    backgroundColor: colors.successTint,
-    paddingHorizontal: 8,
-    paddingVertical: 2,
-    borderRadius: 9999,
-  },
-  syncDot: { width: 6, height: 6, borderRadius: 3, backgroundColor: colors.secondary },
-  syncText: { ...type.captionMedium, color: colors.secondary },
-  screenLabel: { ...type.caption, color: colors.textSecondary },
-  avatar: {
-    width: 32,
-    height: 32,
-    borderRadius: 16,
-    backgroundColor: colors.primary,
+  shopName: { ...type.captionMedium, color: colors.textSecondary },
+  screenLabel: { ...type.display, color: colors.textPrimary },
+  signOut: {
+    width: 44,
+    height: 44,
+    borderRadius: 22,
+    borderWidth: 1,
+    borderColor: colors.borderDefault,
+    backgroundColor: colors.bgSurface,
     alignItems: 'center',
     justifyContent: 'center',
   },
