@@ -39,7 +39,7 @@ export function createRecordSaleUseCase({
       total += product.selling_price * item.quantitySold;
 
       if (product.is_composite) {
-        const preview = recipeEngine.previewDeductions({
+        const preview = await recipeEngine.previewDeductions({
           productID: item.productID,
           quantitySold: item.quantitySold,
         });

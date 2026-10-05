@@ -7,7 +7,7 @@ export const db = open({
 });
 
 export function runMigration() {
-  db.execurte(`
+  db.execute(`
         create table if not exists products (
       id text primary key,
       name text not null,

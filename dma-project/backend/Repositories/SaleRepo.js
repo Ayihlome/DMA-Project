@@ -1,5 +1,5 @@
 import { db } from "../data/local/db";
-
+import { enqueueSync } from "../data/local/syncqueue";
 class SaleRepo {
   async recordSale({
     saleID,
@@ -28,7 +28,7 @@ class SaleRepo {
 
       // 2. record the sale - sync_status starts 'pending' the sync service, flips it to 'synced' once the queue entry below is replayed
       await tx.execute(
-        `insert into sales (id, owner_id, "timestamp", total_amount, sync_status, update_at)
+        `insert into sales (id, owner_id, "timestamp", total_amount, sync_status, updated_at)
             values (?, ?, ?, ?, 'pending', ?)`,
         [saleID, ownerID, timestamp, totalAmount, now],
       );

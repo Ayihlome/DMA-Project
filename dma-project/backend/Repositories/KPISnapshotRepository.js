@@ -5,17 +5,23 @@ class KPISnapshotRepository {
 
   async getSnapshotByProductId(productId) {
     return await this.database.getFirstAsync(
-      `SELECT product_id, velocity, days_remaining, stockouts, turnover, calc_time
+      `SELECT product_id AS productID, sales_velocity AS salesVelocity,
+              days_of_stock_remaining AS daysOfStockRemaining,
+              stockout_frequency AS stockoutFrequency,
+              turnover_rate AS turnoverRate, computed_at AS computedAt
        FROM kpi_snapshots
        WHERE product_id = ?`,
-      [productId]
+      [productId],
     );
   }
 
   async getAllSnapshots() {
     return await this.database.getAllAsync(
-      `SELECT product_id, velocity, days_remaining, stockouts, turnover, calc_time
-       FROM kpi_snapshots`
+      `SELECT product_id AS productID, sales_velocity AS salesVelocity,
+              days_of_stock_remaining AS daysOfStockRemaining,
+              stockout_frequency AS stockoutFrequency,
+              turnover_rate AS turnoverRate, computed_at AS computedAt
+       FROM kpi_snapshots`,
     );
   }
 }

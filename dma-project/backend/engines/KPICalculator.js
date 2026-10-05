@@ -1,18 +1,18 @@
 class KPISnapshot {
   constructor(
     productID,
-    velocity,
-    days_left,
-    stockoutFreq,
-    turnover,
-    calc_time,
+    salesVelocity,
+    daysOfStockRemaining,
+    stockoutFrequency,
+    turnoverRate,
+    computedAt,
   ) {
     this.productID = productID;
-    this.salesVelocity = velocity;
-    this.daysOfRemainingStock = days_left;
-    this.stockoutFreq = stockoutFreq;
-    this.turnoverRate = turnover;
-    this.calc_time = calc_time;
+    this.salesVelocity = salesVelocity;
+    this.daysOfStockRemaining = daysOfStockRemaining;
+    this.stockoutFrequency = stockoutFrequency;
+    this.turnoverRate = turnoverRate;
+    this.computedAt = computedAt;
   }
 }
 
@@ -20,24 +20,24 @@ class KPICalculator {
   constructor(saleRepo, stockRepo, KPISnapshotRepo, windowDays = 30) {
     this.salesRepository = saleRepo;
     this.stockRepository = stockRepo;
-    this.KPISnapshotRepository = KPISnapshotRepo;
+    this.kpiSnapshotRepository = KPISnapshotRepo;
     this.windowDays = windowDays;
   }
 
-  calcSalesVelocity(productID) {
+  async calcSalesVelocity(productID) {
     // total units sold in the rolling window / window length = units per day
-    const totalSold = this.salesRepository.getTotalQuantitySold(
+    const totalSold = await this.salesRepository.getTotalQuantitySold(
       productID,
       this.windowDays,
     );
     return totalSold / this.windowDays;
   }
 
-  calcDaysRemaining(productID) {
-    const stockItem = this.stockRepository.getStockByProductID(productID);
+  async calcDaysRemaining(productID) {
+    const stockItem = await this.stockRepository.getStockByProductId(productID);
     if (!stockItem) return null;
 
-    const velocity = this.calcSalesVelocity(productID);
+    const velocity = await this.calcSalesVelocity(productID);
     if (velocity <= 0) {
       // no recent sale was made so no depletion date can be calculated
       return null;
@@ -46,21 +46,21 @@ class KPICalculator {
     return stockItem.quantityOnHand / velocity;
   }
 
-  calcStockoutFrequency(productID) {
+  async calcStockoutFrequency(productID) {
     // requires a history of stockout to compare to, something like a stock movement table
-    const stockoutEvents = this.stockRepository.getStockoutEventCount(
+    const stockoutEvents = await this.stockRepository.getStockoutEventCount(
       productID,
       this.windowDays,
     );
     return stockoutEvents / this.windowDays;
   }
 
-  calcTurnoverRate(productID) {
-    const totalSold = this.salesRepository.getTotalQuantitySold(
+  async calcTurnoverRate(productID) {
+    const totalSold = await this.salesRepository.getTotalQuantitySold(
       productID,
       this.windowDays,
     );
-    const avgStockHeld = this.stockRepository.getAverageStockHeld(
+    const avgStockHeld = await this.stockRepository.getAverageStockHeld(
       productID,
       this.windowDays,
     );
@@ -69,17 +69,17 @@ class KPICalculator {
     return totalSold / avgStockHeld;
   }
 
-  generateSnapshot(productID) {
+  async generateSnapshot(productID) {
     const snapshot = new KPISnapshot(
       productID,
-      this.calcSalesVelocity(productID),
-      this.calcDaysRemaining(productID),
-      this.calcStockoutFrequency(productID),
-      this.calcTurnoverRate(productID),
+      await this.calcSalesVelocity(productID),
+      await this.calcDaysRemaining(productID),
+      await this.calcStockoutFrequency(productID),
+      await this.calcTurnoverRate(productID),
       new Date().toISOString(),
     );
 
-    this.KPISnapshotRepository.save(snapshot);
+    await this.kpiSnapshotRepository.save(snapshot);
     return snapshot;
   }
 }

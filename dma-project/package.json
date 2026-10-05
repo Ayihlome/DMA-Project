@@ -3,6 +3,8 @@
   "version": "1.0.0",
   "main": "index.ts",
   "dependencies": {
+    "@op-engineering/op-sqlite": "^18.2.5",
+    "@supabase/supabase-js": "^2.117.2",
     "expo": "~57.0.18",
     "expo-sqlite": "~57.0.3",
     "expo-status-bar": "~57.0.1",

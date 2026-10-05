@@ -21,7 +21,7 @@ class RestockEngine {
   }
 
   calcUrgency(kpiSnapshot) {
-    const daysRemaining = kpiSnapshot.daysRemaining;
+    const daysRemaining = kpiSnapshot.daysOfStockRemaining;
 
     if (daysRemaining <= 3) {
       return "Critical";
@@ -44,7 +44,9 @@ class RestockEngine {
     ranked.sort((a, b) => {
       const tierDiff = urgencyOrder[a.urgency] - urgencyOrder[b.urgency];
       if (tierDiff !== 0) return tierDiff;
-      return a.kpiSnapshot.daysRemaining - b.kpiSnapshot.daysRemaining;
+      return (
+        a.kpiSnapshot.daysOfStockRemaining - b.kpiSnapshot.daysOfStockRemaining
+      );
     });
 
     return ranked;
@@ -115,7 +117,7 @@ class RestockEngine {
     const explanationParts = [];
 
     explanationParts.push(
-      `${kpiSnapshot.daysRemaining} day(s) of stock remaining.`,
+      `${kpiSnapshot.daysOfStockRemaining} day(s) of stock remaining.`,
     );
 
     const nextCheapest = comparisons.find((c) => !c.isCheapest);
@@ -148,13 +150,8 @@ class RestockEngine {
     const rawSnapshots = await this.kpiSnapshotRepository.getAllSnapshots();
 
     const products = rawSnapshots.map((row) => ({
-      product: { productId: row.product_id },
-      kpiSnapshot: {
-        daysRemaining: row.days_remaining,
-        salesVelocity: row.velocity,
-        stockouts: row.stockouts,
-        turnover: row.turnover,
-      },
+      product: { productId: row.productID },
+      kpiSnapshot: row,
     }));
 
     const ranked = this.rankByUrgency(products);
@@ -168,7 +165,7 @@ class RestockEngine {
       }
 
       const rawPrices = await this.supplierPriceRepository.getPricesByProductId(
-        item.product.productId
+        item.product.productId,
       );
 
       const supplierPrices = rawPrices.map((row) => ({
@@ -181,10 +178,13 @@ class RestockEngine {
       const daysToRestock = 7; // restock enough to cover a week of expected sales
       const recommendedQty = Math.max(
         1,
-        Math.ceil(item.kpiSnapshot.salesVelocity * daysToRestock)
+        Math.ceil(item.kpiSnapshot.salesVelocity * daysToRestock),
       );
 
-      const supplierResult = this.selectSupplier(supplierPrices, recommendedQty);
+      const supplierResult = this.selectSupplier(
+        supplierPrices,
+        recommendedQty,
+      );
 
       if (!supplierResult) {
         continue;
@@ -202,7 +202,7 @@ class RestockEngine {
         supplierResult,
         recommendedQty,
         cart,
-        budget
+        budget,
       );
 
       recommendations.push(recommendation);

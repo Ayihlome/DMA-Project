@@ -1,9 +1,9 @@
-import db from "./db.js";
-import {creatClient} from "@supabase/supuabse-js";
+import { db } from "./db.js";
+import { createClient } from "@supabase/supabase-js";
 
 const supabase = createClient(
-process.env.SUPABASE_URL,
-process.env.SUPABASE_KEY,
+  process.env.SUPABASE_URL,
+  process.env.SUPABASE_KEY,
 );
 
 export async function enqueueSync(entityType, entityID, operation, payload) {
@@ -21,59 +21,58 @@ export async function enqueueSync(entityType, entityID, operation, payload) {
   );
 }
 
-export async function processSyncQueue(){
-
-  const[pendingItems] = await db.execute (
-   `select * from sync_queue
+export async function processSyncQueue() {
+  const { rows: pendingItems } = await db.execute(
+    `select * from sync_queue
     where status = 'pending'
-    order by created_at asc`
+    order by created_at asc`,
   );
 
-  for (const item of pendingItems){
-      try{
-        const payload = JSON.parse(item.payload_json);
-        
-        if (item.operation === "INSERT"){
+  for (const item of pendingItems) {
+    try {
+      const payload = JSON.parse(item.payload_json);
 
-          const{error} = await supabase.from(item.entity_type).insert(payload);
+      if (item.operation === "insert") {
+        const { error } = await supabase.from(item.entity_type).insert(payload);
 
-          if (error){
-            throw error;
-          }
+        if (error) {
+          throw error;
         }
-        else if (item.operation === "UPDATE"){
-          const {error} = await supabase.from(item.entity_type).update(payload).eq("id", item.entity_id);
-          
-          if (error){
-            throw error;
-          }
+      } else if (item.operation === "update") {
+        const { error } = await supabase
+          .from(item.entity_type)
+          .update(payload)
+          .eq("id", item.entity_id);
+
+        if (error) {
+          throw error;
         }
-        else if (item.operation === "DELETE"){
-          const {error} = await supabase.from(item.entity_type).delete().eq("id", item.entity_id);
+      } else if (item.operation === "delete") {
+        const { error } = await supabase
+          .from(item.entity_type)
+          .delete()
+          .eq("id", item.entity_id);
 
-          if (error){
-            throw error;
-          }
+        if (error) {
+          throw error;
         }
-
-        await db.execute(
-         `update sync_queue set status = 'synced' where id = ?`
-          [item.id]
-        );
-      
-      } catch (error) {
-        
-        console.error(
-          `Failed to sync ${item.entity_type} ${item.entity_id}:` ,
-          error
-        );
-
-        await db.execute(
-         `update sync_queue
-          set retry_count = retry_count + 1
-          where id = ?`, 
-          [item.id]
-        )
       }
+
+      await db.execute(`update sync_queue set status = 'synced' where id = ?`, [
+        item.id,
+      ]);
+    } catch (error) {
+      console.error(
+        `Failed to sync ${item.entity_type} ${item.entity_id}:`,
+        error,
+      );
+
+      await db.execute(
+        `update sync_queue
+          set retry_count = retry_count + 1
+          where id = ?`,
+        [item.id],
+      );
+    }
   }
 }

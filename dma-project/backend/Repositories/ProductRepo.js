@@ -1,5 +1,5 @@
 import { db } from "../data/local/db";
-import { enqueueSync } from "../data/local/syncQueue";
+import { enqueueSync } from "../data/local/syncqueue";
 
 class ProductRepo {
   async getByID(productID) {
@@ -9,7 +9,7 @@ class ProductRepo {
     return rows[0] ?? null;
   }
 
-  async create() {
+  async create(product) {
     const now = new Date().toISOString();
     await db.execute(
       `insert into product (id, name, sku, unit, is_composite, selling_price, created_at, updated_at, is_deleted) values (?, ?, ?, ?, ?, ?, ?, ?, 0)`,

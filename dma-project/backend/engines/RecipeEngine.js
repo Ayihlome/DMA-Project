@@ -1,9 +1,9 @@
 // import RecipeComponent from "domain/recipe.js"
 
 class StockUpdateResult {
-  constructor(success, updates = [], errors = []) {
+  constructor(success, deductions = [], errors = []) {
     this.success = success;
-    this.updates = updates;
+    this.deductions = deductions;
     this.errors = errors;
   }
 }
@@ -12,14 +12,14 @@ class RecipeEngine {
     this.recipeRepository = recipe;
     this.stockRepository = stockItem;
   }
-  resolveComposite(productID) {
+  async resolveComposite(productID) {
     // returns the component recipe(bread, chips etc) items of the parent (kota)
-    return this.recipeRepository.getComponentByParentProductID(productID);
+    return this.recipeRepository.getComponentsByParentProductId(productID);
   }
 
-  calcDeductions(saleLineItem) {
+  async previewDeductions(saleLineItem) {
     // 1. we get the components of the item
-    const components = this.resolveComposite(saleLineItem.productID);
+    const components = await this.resolveComposite(saleLineItem.productID);
 
     if (components.length === 0) {
       // if none return nothing
@@ -43,7 +43,10 @@ class RecipeEngine {
 
     //3. Validate before stock changes
     for (const deduction of deductions) {
-      const valid = this.checkStock(deduction.productID, deduction.quantity);
+      const valid = await this.checkStock(
+        deduction.productID,
+        deduction.quantity,
+      );
 
       if (!valid) {
         return new StockUpdateResult(
@@ -54,25 +57,29 @@ class RecipeEngine {
       }
     }
 
-    //4. Apply deductions
+    return new StockUpdateResult(true, deductions, []);
+  }
+
+  async calcDeductions(saleLineItem) {
+    const preview = await this.previewDeductions(saleLineItem);
+    if (!preview.success) return preview;
+
     const updates = [];
-
-    for (const deduction of deductions) {
-      const update = this.stockRepository.deductStock(
-        deduction.productID,
-        deduction.quantity,
+    for (const deduction of preview.deductions) {
+      updates.push(
+        await this.stockRepository.deductStock(
+          deduction.productID,
+          deduction.quantity,
+        ),
       );
-
-      updates.push(update);
     }
 
-    // 5. Return result
     return new StockUpdateResult(true, updates, []);
   }
 
-  checkStock(productID, quantity) {
+  async checkStock(productID, quantity) {
     // check current stock of that item
-    const stockItem = this.stockRepository.getStockByProductID(productID);
+    const stockItem = await this.stockRepository.getStockByProductId(productID);
 
     if (!stockItem) {
       return false;
