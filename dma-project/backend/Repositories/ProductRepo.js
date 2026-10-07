@@ -9,10 +9,15 @@ class ProductRepository {
     return rows[0] ?? null;
   }
 
+  async getAll() {
+    const { rows } = await db.execute(`select * from products`);
+    return rows ?? null;
+  }
+
   async create(product) {
     const now = new Date().toISOString();
     await db.execute(
-      `insert into product (id, name, sku, unit, is_composite, selling_price, created_at, updated_at, is_deleted) values (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      `insert into products (id, name, sku, unit, is_composite, selling_price, created_at, updated_at, is_deleted) values (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
       [
         product.id,
         product.name,

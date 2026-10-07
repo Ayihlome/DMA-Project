@@ -110,7 +110,7 @@ export function runMigration() {
   `);
 
   db.execute(
-    `create table if not exist suppliers (
+    `create table if not exists suppliers (
     name text primary key,
     contact integer not null,
     location text not null
@@ -118,9 +118,9 @@ export function runMigration() {
   );
 
   db.execute(
-    `create table if not exist supplier_prices (
-    supplier text primary key,
-    product text not null,
+    `create table if not exists supplier_prices (
+    supplier_id text primary key,
+    product_id text not null,
     unit_price integer not null,
     minimum_order integer not null
     );`,
