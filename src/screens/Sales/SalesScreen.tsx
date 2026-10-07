@@ -1,4 +1,5 @@
 import React, { useState } from 'react'
+// import {useCases} from "../../../container" accessible 
 import {
   View,
   Text,
@@ -55,6 +56,8 @@ export default function SalesScreen() {
 
   function confirmSale() {
     setToastVisible(true)
+    //example of how to use use cases: starting with the import
+    // const result = await useCases.recordSale({ownerID, items: cartItems})
     setTimeout(() => setToastVisible(false), 2800)
   }
 
