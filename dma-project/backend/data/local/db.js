@@ -111,9 +111,12 @@ export function runMigration() {
 
   db.execute(
     `create table if not exists suppliers (
-    name text primary key,
+    id text primary key, 
+    name text,
     contact integer not null,
-    location text not null
+    location text not null,
+    updated_at text not null,
+    is_deleted text not null
     );`,
   );
 

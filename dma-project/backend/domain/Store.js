@@ -5,3 +5,5 @@ class Store {
     this.budget = budget;
   }
 }
+
+module.exports = Store;

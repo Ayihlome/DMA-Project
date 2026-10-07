@@ -5,3 +5,5 @@ class Sale {
     this.timestamp = Date.now();
   }
 }
+
+module.exports = Sale;
