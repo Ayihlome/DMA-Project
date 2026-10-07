@@ -1,27 +1,27 @@
 // Imports all engines and repos so that they can be called  by the frontendthrough a 'useCases' import
 
 // Repositories
-import KPISnapshotRepo from "./Repositories/KPISnapshotRepo";
-import ProductRepository from "./Repositories/ProductRepo";
-import RecipeRepository from "./Repositories/RecipeRepo";
-import SaleRepository from "./Repositories/SaleRepo";
-import StockRepository from "./Repositories/StockRepo";
-import SupplierPriceRepository from "./Repositories/SupplierPriceRepository";
-import SupplierRepository from "./Repositories/SupplierRepository";
+import KPISnapshotRepo from "../Repositories/KPISnapshotRepo";
+import ProductRepository from "../Repositories/ProductRepo";
+import RecipeRepository from "../Repositories/RecipeRepo";
+import SaleRepository from "../Repositories/SaleRepo";
+import StockRepository from "../Repositories/StockRepo";
+import SupplierPriceRepository from "../Repositories/SupplierPriceRepository";
+import SupplierRepository from "../Repositories/SupplierRepository";
 
 //Engines
-import KPICalculator from "./engines/KPICalculator";
-import RecipeEngine from "./engines/RecipeEngine";
-import RestockEngine from "./engines/RestockEngine";
+import KPICalculator from "../engines/KPICalculator";
+import RecipeEngine from "../engines/RecipeEngine";
+import RestockEngine from "../engines/RestockEngine";
 
 //Use cases
-import { createGetDashboardKpiUseCase } from "./useCases/dashboardKPIs";
-import { createRecordSaleUseCase } from "./useCases/recordSale";
-import { createGenerateRestockPlanUseCase } from "./useCases/generateRestockPlan";
-import { createPreviewSaleDeductionUseCase } from "./useCases/previewSalleableProduct";
-import { createCreateProductUseCase } from "./useCases/createProduct";
-import { createCreateSupplierUseCase } from "./useCases/createSupplier";
-import { createSetRecipeComponentsUseCase } from "./useCases/setRecipeComponents";
+import { createGetDashboardKpiUseCase } from "./dashboardKPIs";
+import { createRecordSaleUseCase } from "./recordSale";
+import { createGenerateRestockPlanUseCase } from "./generateRestockPlan";
+import { createPreviewSaleDeductionUseCase } from "./previewSalleableProduct";
+import { createCreateProductUseCase } from "./createProduct";
+import { createCreateSupplierUseCase } from "./createSupplier";
+import { createSetRecipeComponentsUseCase } from "./setRecipeComponents";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();

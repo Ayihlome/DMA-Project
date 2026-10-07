@@ -37,7 +37,7 @@ export function createCreateProductUseCase({ productRepository }) {
 
     try {
       await productRepository.create(product);
-    } catch {
+    } catch (err) {
       return { success: false, errors: [err.message] };
     }
 

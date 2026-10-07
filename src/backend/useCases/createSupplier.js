@@ -21,7 +21,7 @@ export function createCreateSupplierUseCase({ supplierRepository }) {
     try {
       await supplierRepository.create(supplier);
     } catch (err) {
-      return { success: false, errors: [err.messages] };
+      return { success: false, errors: [err.message] };
     }
 
     return { success: true, supplier };

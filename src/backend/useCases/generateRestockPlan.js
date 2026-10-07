@@ -4,14 +4,14 @@ export async function createGenerateRestockPlanUseCase({
   supplierPriceRepository,
 }) {
   return async function generateRestockPlan(input) {
-    const rawSnapshots = await this.kpiSnapshotRepository.getAllSnapshots();
+    const rawSnapshots = await KPISnapshotRepository.getAllSnapshots();
 
     const products = rawSnapshots.map((row) => ({
       product: { productId: row.productID },
       kpiSnapshot: row,
     }));
 
-    const ranked = this.rankByUrgency(products);
+    const ranked = RestockEngine.rankByUrgency(products);
 
     const cart = [];
     const recommendations = [];
@@ -21,7 +21,7 @@ export async function createGenerateRestockPlanUseCase({
         continue;
       }
 
-      const rawPrices = await this.supplierPriceRepository.getPricesByProductId(
+      const rawPrices = await supplierPriceRepository.getPricesByProductId(
         item.product.productId,
       );
 
@@ -38,7 +38,7 @@ export async function createGenerateRestockPlanUseCase({
         Math.ceil(item.kpiSnapshot.salesVelocity * daysToRestock),
       );
 
-      const supplierResult = this.selectSupplier(
+      const supplierResult = supplierPriceRepository.selectSupplier(
         supplierPrices,
         recommendedQty,
       );
@@ -53,7 +53,7 @@ export async function createGenerateRestockPlanUseCase({
         quantity: recommendedQty,
       });
 
-      const recommendation = this.generateRecommendation(
+      const recommendation = restockEngine.generateRecommendation(
         item.product,
         item.kpiSnapshot,
         supplierResult,
@@ -68,5 +68,3 @@ export async function createGenerateRestockPlanUseCase({
     return recommendations;
   };
 }
-
-export default RestockEngine;

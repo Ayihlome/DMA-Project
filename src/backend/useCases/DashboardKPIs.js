@@ -18,7 +18,7 @@ export function createGetDashboardKpiUseCase({
     const products = await productRepository.getAll();
     const snapshots = [];
 
-    for (const product in products) {
+    for (const product of products) {
       const snapshot = kpiCalculator.generateSnapshot(product.id);
       snapshots.push(snapshot);
     }

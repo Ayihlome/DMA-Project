@@ -31,7 +31,7 @@ export function createPreviewSaleDeductionUseCase({
     for (const item of input.items) {
       const product = await productRepository.getByID(item.productID);
       if (!product) {
-        errors.push(`Unknown product ${(item, productID)}`);
+        errors.push(`Unknown product ${item.productID}`);
         continue;
       }
 
@@ -41,7 +41,7 @@ export function createPreviewSaleDeductionUseCase({
         continue;
       }
 
-      const preview = recipeEngine.previewDeductions({
+      const preview = await recipeEngine.previewDeductions({
         productID: item.productID,
         quantitySold: item.quantitySold,
       });

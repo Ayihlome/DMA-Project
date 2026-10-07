@@ -48,9 +48,6 @@ export function createRecordSaleUseCase({
           return { success: false, errors: preview.errors };
         }
         allDeductions.push(...preview.deductions);
-      } else {
-        // if it isnt a composite item
-        allDeductions.push(product);
       }
     }
 
