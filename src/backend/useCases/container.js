@@ -1,5 +1,8 @@
 // Imports all engines and repos so that they can be called  by the frontendthrough a 'useCases' import
 
+//logging
+import { withLogging } from "./Logging/withLogging";
+
 // Repositories
 import KPISnapshotRepo from "../Repositories/KPISnapshotRepo";
 import ProductRepository from "../Repositories/ProductRepo";
@@ -43,7 +46,7 @@ const kpiCalculator = new KPICalculator(
   kpiSnapshotRepository,
 );
 
-export const useCases = {
+const rawUseCases = {
   recordSale: createRecordSaleUseCase({
     recipeEngine,
     saleRepository,
@@ -69,3 +72,11 @@ export const useCases = {
     productRepository,
   }),
 };
+
+// every use case gets logged through here
+export const useCase = Object.fromEntries(
+  Object.entries(rawUseCases).map(([name, fn]) => [
+    name,
+    withLogging(name, fn),
+  ]),
+);
