@@ -1,0 +1,101 @@
+{
+  "formatVersion": "1.1",
+  "component": {
+    "group": "host.exp.exponent",
+    "module": "expo.modules.sqlite",
+    "version": "57.0.3",
+    "attributes": {
+      "org.gradle.status": "release"
+    }
+  },
+  "createdBy": {
+    "gradle": {
+      "version": "9.3.1"
+    }
+  },
+  "variants": [
+    {
+      "name": "releaseVariantReleaseApiPublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-api"
+      },
+      "files": [
+        {
+          "name": "expo.modules.sqlite-57.0.3.aar",
+          "url": "expo.modules.sqlite-57.0.3.aar",
+          "size": 3823160,
+          "sha512": "97b9f3c849ecda169a14bd40502d11b42a7db55e98a1ac3a33391a720bdac4748fd4e7fe190c1ab77c37aada7d932f7b587efa141949d4f4f281959e5e1a2475",
+          "sha256": "df1da5f5381b01deb84c69e946436e98f69fb7a3c3f55c03b01e88061fd88e4d",
+          "sha1": "87f1f42b8d635fff98edf78cf7a123628dc369e0",
+          "md5": "89190f5fa83aadb89346c061f9cb6c34"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseRuntimePublication",
+      "attributes": {
+        "org.gradle.category": "library",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.libraryelements": "aar",
+        "org.gradle.usage": "java-runtime"
+      },
+      "dependencies": [
+        {
+          "group": "org.jetbrains.kotlin",
+          "module": "kotlin-stdlib-jdk7",
+          "version": {
+            "requires": "2.1.20"
+          }
+        },
+        {
+          "group": "org.jetbrains",
+          "module": "annotations",
+          "version": {
+            "requires": "23.0.0"
+          }
+        },
+        {
+          "group": "io.github.lukmccall.pika",
+          "module": "pika-api",
+          "version": {
+            "requires": "0.3.2"
+          }
+        }
+      ],
+      "files": [
+        {
+          "name": "expo.modules.sqlite-57.0.3.aar",
+          "url": "expo.modules.sqlite-57.0.3.aar",
+          "size": 3823160,
+          "sha512": "97b9f3c849ecda169a14bd40502d11b42a7db55e98a1ac3a33391a720bdac4748fd4e7fe190c1ab77c37aada7d932f7b587efa141949d4f4f281959e5e1a2475",
+          "sha256": "df1da5f5381b01deb84c69e946436e98f69fb7a3c3f55c03b01e88061fd88e4d",
+          "sha1": "87f1f42b8d635fff98edf78cf7a123628dc369e0",
+          "md5": "89190f5fa83aadb89346c061f9cb6c34"
+        }
+      ]
+    },
+    {
+      "name": "releaseVariantReleaseSourcePublication",
+      "attributes": {
+        "org.gradle.category": "documentation",
+        "org.gradle.dependency.bundling": "external",
+        "org.gradle.docstype": "sources",
+        "org.gradle.usage": "java-runtime"
+      },
+      "files": [
+        {
+          "name": "expo.modules.sqlite-57.0.3-sources.jar",
+          "url": "expo.modules.sqlite-57.0.3-sources.jar",
+          "size": 11551,
+          "sha512": "3b63d91aadb7a09514fc8fb158bb08caf92b6108cbc0876893b1a7a3fd33c1a4934c3b7912a858404f0a0eac7b854572fa90c90b8c93b9b52bde2204dcdab735",
+          "sha256": "b8f668275e3ec93cff367011da2b3ae7bd83f43a690ce56473395ba6284c8b7c",
+          "sha1": "7c0a8d8193faac646dccacbe00982974ffb4f488",
+          "md5": "9b900a345245e67770016ae8154b63e1"
+        }
+      ]
+    }
+  ]
+}
