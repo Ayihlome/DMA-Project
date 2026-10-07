@@ -16,3 +16,6 @@ class SupplierPrice {
     this.minimumOrder = minimum_order;
   }
 }
+
+module.exports = SupplierPrice;
+module.exports = Suppliers;

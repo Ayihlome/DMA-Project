@@ -1,8 +1,8 @@
 class RecipeComponent {
-  constructor(productID, compProductID, quantity) {
+  constructor(productID, componentProductID, quantity) {
     this.productID = productID; // the main product e,g Kota 3
-    this.compProductID = compProductID; // ingredient
-    this.quantity = quantity;
+    this.componentProductID = componentProductID; // ingredient
+    this.quantityRequired = quantity;
   }
 }
 

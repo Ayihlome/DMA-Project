@@ -20,8 +20,6 @@ class StockItem {
     this.quantity = quantity;
     this.lastRestock = 0; // datatime or days
   }
-
-  deductStock(amount) {}
 }
 
 module.exports = StockItem;
