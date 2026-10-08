@@ -1,5 +1,5 @@
 import React, { useState } from 'react'
-import { useCases } from "../../../backend/useCases/container"
+import { useCase } from "../../backend/useCases/container"
 import {
   View,
   Text,
@@ -26,6 +26,8 @@ interface CartItem {
   qty: number
   hasRecipe?: boolean
 }
+
+let cart = []
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets()
