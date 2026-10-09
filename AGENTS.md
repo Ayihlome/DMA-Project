@@ -1,4 +1,4 @@
-# saii-sisonke-stock
+# saii-StockEvo
 
 React + Vite + Tailwind CSS project running inside saii Make.
 
