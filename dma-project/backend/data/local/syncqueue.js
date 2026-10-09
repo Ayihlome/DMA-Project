@@ -28,12 +28,14 @@ export async function processSyncQueue() {
       const payload = JSON.parse(item.payload_json);
       
       if (item.entity_type === "stock_movements") {
-        const { error } = await supabase.rpc (
-          "record_stock_movement",
+        const { error } = await supabase.from ("stock_movements").insert (
           {
-            p_movement_id: item.entity_id,
-            p_stock_item_id: payload.stock_item_id,
-            p_quantity: payload.quantity_delta  
+            id: item.entity_id,
+            product_id: payload.productid,
+            delta: payload.delta,
+            resulting_quantity: payload.resulting_quantity,
+            reason: payload.reason,
+            created_at: payload.created_at
           }
          );
         if (error) {
