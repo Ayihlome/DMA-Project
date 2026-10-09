@@ -1,288 +1,639 @@
-import { useState } from 'react'
+import { useEffect, useId, useMemo, useState } from 'react'
+import { useSearchParams } from 'react-router'
+import { useStore } from '../data/store'
+import { available, healthOf, pricesFor, productById, stockItems, supplierName, unitQty } from '../data/inventory'
+import { CATEGORIES, type CategoryKey, type Product, type SupplierPrice } from '../data/types'
+import { rand, relativeTime } from '../lib/format'
+import { useToast } from '../components/Toast'
+import { Button, Card, EmptyState, Field, Icon, Modal, Pill, ProductThumb, StatusBadge, cx, inputClass } from '../components/ui'
 
-type Supplier = 'jumbo' | 'devland' | 'tiger'
+const STALE_DAYS = 14
 
-interface SupplierCard {
-  id: Supplier
+type Draft = { supplierName: string; location: string; packPrice: string; unitsPerPack: string; minOrder: string }
+type ProductDraft = {
   name: string
-  price: number
-  packPrice: number
-  badge: string
-  badgeClass: string
-  timestamp: string
-  location: string
-  distance: string
-  delivery: string
-  deliveryIcon: string
-  minOrder: string
-  priceDelta?: string
-  warning?: string
+  detail: string
+  category: CategoryKey
+  price: string
+  stock: string
+  unit: string
+  unitPlural: string
+  packSize: string
 }
 
-const SUPPLIERS: SupplierCard[] = [
-  {
-    id: 'jumbo',
-    name: 'Jumbo Cash & Carry',
-    price: 13.20,
-    packPrice: 132.00,
-    badge: 'CHEAPEST',
-    badgeClass: 'bg-[#2F855A] text-on-secondary',
-    timestamp: '2 days ago',
-    location: 'Crown Mines (4.2 km)',
-    distance: '4.2 km',
-    delivery: 'Pickup ready',
-    deliveryIcon: 'local_shipping',
-    minOrder: 'Min: 2 crates (20 loaves)',
-  },
-  {
-    id: 'devland',
-    name: 'Devland Mega Wholesale',
-    price: 13.90,
-    packPrice: 139.00,
-    badge: 'Standard Rate',
-    badgeClass: 'bg-surface-container text-text-secondary',
-    timestamp: 'Yesterday',
-    location: '',
-    distance: '3.8 km away',
-    delivery: '',
-    deliveryIcon: '',
-    minOrder: 'Min: 1 crate',
-    priceDelta: '+R0.70 more per loaf than cheapest',
-  },
-  {
-    id: 'tiger',
-    name: 'Tiger Brands Direct Depot',
-    price: 14.50,
-    packPrice: 145.00,
-    badge: 'Depot Direct',
-    badgeClass: 'bg-surface-container text-text-secondary',
-    timestamp: '3 days ago',
-    location: '',
-    distance: '',
-    delivery: '',
-    deliveryIcon: '',
-    minOrder: 'Min: 5 crates',
-    priceDelta: '+R1.30 more per loaf than cheapest',
-    warning: 'Bulk delivery fee applies if under 5 crates',
-  },
-]
+const BLANK_PRODUCT: ProductDraft = {
+  name: '',
+  detail: '',
+  category: 'pantry',
+  price: '',
+  stock: '0',
+  unit: '',
+  unitPlural: '',
+  packSize: '1',
+}
 
-export default function Supply() {
-  const [selected, setSelected] = useState<Supplier>('jumbo')
-  const [modalOpen, setModalOpen] = useState(false)
-  const [applied, setApplied] = useState(false)
+function ProductModal({ open, onClose, onCreated }: { open: boolean; onClose: () => void; onCreated: (product: Product) => void }) {
+  const { state, addProduct } = useStore()
+  const toast = useToast()
+  const [draft, setDraft] = useState<ProductDraft>(BLANK_PRODUCT)
+  const [tried, setTried] = useState(false)
 
-  function applySupplier() {
-    setApplied(true)
-    setTimeout(() => setApplied(false), 1800)
+  useEffect(() => {
+    if (!open) return
+    setDraft(BLANK_PRODUCT)
+    setTried(false)
+  }, [open])
+
+  const price = parseFloat(draft.price)
+  const stock = parseFloat(draft.stock)
+  const packSize = parseFloat(draft.packSize)
+  const errors = {
+    name: !draft.name.trim()
+      ? 'Enter a product name.'
+      : state.products.some((product) => product.name.toLowerCase() === draft.name.trim().toLowerCase())
+        ? 'A product with this name already exists.'
+        : undefined,
+    price: !(price >= 0) ? 'Enter the selling price.' : undefined,
+    stock: !(stock >= 0) ? 'Enter 0 or the quantity currently on hand.' : undefined,
+    unit: !draft.unit.trim() ? 'Enter the name of one unit.' : undefined,
+    unitPlural: !draft.unitPlural.trim() ? 'Enter the plural unit name.' : undefined,
+    packSize: !(packSize >= 1) ? 'Enter at least 1 unit per pack.' : undefined,
+  }
+  const valid = !Object.values(errors).some(Boolean)
+  const set = (key: keyof ProductDraft) => (event: React.ChangeEvent<HTMLInputElement | HTMLSelectElement>) =>
+    setDraft((current) => ({ ...current, [key]: event.target.value }))
+
+  function save() {
+    setTried(true)
+    if (!valid) return
+    const product = addProduct({
+      name: draft.name,
+      detail: draft.detail,
+      category: draft.category,
+      price,
+      stock,
+      unit: draft.unit,
+      unitPlural: draft.unitPlural,
+      packSize,
+    })
+    toast(`${product.name} was added to your inventory.`)
+    onCreated(product)
   }
 
-  const selectedCard = SUPPLIERS.find(s => s.id === selected)!
+  return (
+    <Modal
+      open={open}
+      onClose={onClose}
+      title="Add individual product"
+      description="Create a product you buy, stock, and sell as an individual item."
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button icon="add" onClick={save}>
+            Add product
+          </Button>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-space-sm"
+        onSubmit={(event) => {
+          event.preventDefault()
+          save()
+        }}
+      >
+        <Field label="Product name" error={tried ? errors.name : undefined}>
+          {(id) => <input id={id} className={inputClass} value={draft.name} onChange={set('name')} placeholder="e.g. Orange Juice 1L" />}
+        </Field>
+        <Field label="Description (optional)">
+          {(id) => <input id={id} className={inputClass} value={draft.detail} onChange={set('detail')} placeholder="e.g. 100% fruit juice" />}
+        </Field>
+        <Field label="Category">
+          {(id) => (
+            <select id={id} className={cx(inputClass, 'cursor-pointer')} value={draft.category} onChange={set('category')}>
+              {CATEGORIES.map((category) => (
+                <option key={category.key} value={category.key}>
+                  {category.label}
+                </option>
+              ))}
+            </select>
+          )}
+        </Field>
+        <div className="grid grid-cols-2 gap-space-sm">
+          <Field label="Selling price (R)" error={tried ? errors.price : undefined}>
+            {(id) => (
+              <input
+                id={id}
+                className={inputClass}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="0.01"
+                value={draft.price}
+                onChange={set('price')}
+                placeholder="0.00"
+              />
+            )}
+          </Field>
+          <Field label="Current stock" error={tried ? errors.stock : undefined}>
+            {(id) => (
+              <input
+                id={id}
+                className={inputClass}
+                type="number"
+                inputMode="decimal"
+                min="0"
+                step="any"
+                value={draft.stock}
+                onChange={set('stock')}
+              />
+            )}
+          </Field>
+        </div>
+        <div className="grid grid-cols-2 gap-space-sm">
+          <Field label="Unit name" error={tried ? errors.unit : undefined} hint="What one item is called.">
+            {(id) => <input id={id} className={inputClass} value={draft.unit} onChange={set('unit')} placeholder="bottle" />}
+          </Field>
+          <Field label="Plural unit" error={tried ? errors.unitPlural : undefined}>
+            {(id) => <input id={id} className={inputClass} value={draft.unitPlural} onChange={set('unitPlural')} placeholder="bottles" />}
+          </Field>
+        </div>
+        <Field label="Units in a supplier pack" error={tried ? errors.packSize : undefined} hint="Use 1 if suppliers sell this item individually.">
+          {(id) => (
+            <input
+              id={id}
+              className={inputClass}
+              type="number"
+              inputMode="decimal"
+              min="1"
+              step="any"
+              value={draft.packSize}
+              onChange={set('packSize')}
+            />
+          )}
+        </Field>
+        <button type="submit" className="sr-only">
+          Add product
+        </button>
+      </form>
+    </Modal>
+  )
+}
+
+function PriceModal({
+  product,
+  open,
+  onClose,
+  initial,
+}: {
+  product: Product
+  open: boolean
+  onClose: () => void
+  initial?: SupplierPrice
+}) {
+  const { state, upsertSupplierPrice } = useStore()
+  const toast = useToast()
+  const listId = useId()
+  const blank: Draft = { supplierName: '', location: '', packPrice: '', unitsPerPack: String(product.packSize), minOrder: '' }
+  const [d, setD] = useState<Draft>(blank)
+  const [tried, setTried] = useState(false)
+
+  useEffect(() => {
+    if (!open) return
+    setTried(false)
+    setD(
+      initial
+        ? {
+            supplierName: supplierName(state, initial.supplierId),
+            location: state.suppliers.find((s) => s.id === initial.supplierId)?.location ?? '',
+            packPrice: (initial.unitPrice * product.packSize).toFixed(2),
+            unitsPerPack: String(product.packSize),
+            minOrder: initial.minOrder ? String(initial.minOrder) : '',
+          }
+        : blank,
+    )
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open, initial, product.id])
+
+  const pack = parseFloat(d.packPrice)
+  const per = parseFloat(d.unitsPerPack)
+  const min = d.minOrder ? parseFloat(d.minOrder) : undefined
+  const errors = {
+    supplierName: !d.supplierName.trim() ? 'Enter the supplier name.' : undefined,
+    packPrice: !(pack > 0) ? 'Enter a price above R0.' : undefined,
+    unitsPerPack: !(per > 0) ? 'Enter how many units are in the pack.' : undefined,
+    minOrder: min !== undefined && !(min > 0) ? 'Leave empty or enter a number above 0.' : undefined,
+  }
+  const valid = !Object.values(errors).some(Boolean)
+  const unitPrice = valid ? Math.round((pack / per) * 100) / 100 : null
+
+  function save() {
+    setTried(true)
+    if (!valid || unitPrice === null) return
+    upsertSupplierPrice({ productId: product.id, supplierName: d.supplierName, unitPrice, minOrder: min, location: d.location })
+    toast(`Saved ${rand(unitPrice)} per ${product.unit} from ${d.supplierName.trim()}.`)
+    onClose()
+  }
+
+  const set = (k: keyof Draft) => (e: React.ChangeEvent<HTMLInputElement>) => setD({ ...d, [k]: e.target.value })
 
   return (
-    <main className="flex flex-col relative w-full pt-16 pb-20 bg-bg-base lg:pl-64 lg:pt-0 lg:pb-0">
-      <div className="flex flex-col w-full px-space-md py-space-sm space-y-space-md lg:max-w-6xl lg:mx-auto lg:px-space-xl lg:py-space-lg">
+    <Modal
+      open={open}
+      onClose={onClose}
+      title={initial ? 'Update supplier price' : 'Add supplier price'}
+      description={`${product.name} · prices are saved on this device and synced when online.`}
+      footer={
+        <>
+          <Button variant="ghost" onClick={onClose}>
+            Cancel
+          </Button>
+          <Button icon="check" onClick={save}>
+            Save price
+          </Button>
+        </>
+      }
+    >
+      <form
+        className="flex flex-col gap-space-sm"
+        onSubmit={(e) => {
+          e.preventDefault()
+          save()
+        }}
+      >
+        <Field label="Supplier name" error={tried ? errors.supplierName : undefined}>
+          {(id) => (
+            <>
+              <input
+                id={id}
+                list={listId}
+                className={inputClass}
+                value={d.supplierName}
+                onChange={set('supplierName')}
+                placeholder="e.g. Jumbo Cash & Carry"
+                autoComplete="off"
+                readOnly={!!initial}
+              />
+              <datalist id={listId}>
+                {state.suppliers.map((s) => (
+                  <option key={s.id} value={s.name} />
+                ))}
+              </datalist>
+            </>
+          )}
+        </Field>
+        {!initial && (
+          <Field label="Location (optional)">
+            {(id) => <input id={id} className={inputClass} value={d.location} onChange={set('location')} placeholder="e.g. Crown Mines" />}
+          </Field>
+        )}
+        <div className="grid grid-cols-2 gap-space-sm">
+          <Field label="Pack price (R)" error={tried ? errors.packPrice : undefined}>
+            {(id) => (
+              <input
+                id={id}
+                className={inputClass}
+                inputMode="decimal"
+                type="number"
+                min="0"
+                step="0.01"
+                value={d.packPrice}
+                onChange={set('packPrice')}
+                placeholder="132.00"
+              />
+            )}
+          </Field>
+          <Field label={`${product.unitPlural} per pack`} error={tried ? errors.unitsPerPack : undefined}>
+            {(id) => (
+              <input
+                id={id}
+                className={inputClass}
+                inputMode="decimal"
+                type="number"
+                min="0"
+                step="any"
+                value={d.unitsPerPack}
+                onChange={set('unitsPerPack')}
+              />
+            )}
+          </Field>
+        </div>
+        <Field label={`Minimum order (${product.unitPlural}, optional)`} error={tried ? errors.minOrder : undefined}>
+          {(id) => (
+            <input
+              id={id}
+              className={inputClass}
+              inputMode="decimal"
+              type="number"
+              min="0"
+              step="any"
+              value={d.minOrder}
+              onChange={set('minOrder')}
+            />
+          )}
+        </Field>
+        <p className="p-space-sm rounded-lg bg-accent-tint text-primary font-label text-label flex items-center gap-space-xs">
+          <Icon name="calculate" />
+          {unitPrice !== null ? `${rand(unitPrice)} per ${product.unit}` : 'Enter the pack price to see the unit price'}
+        </p>
+        <button type="submit" className="sr-only">
+          Save price
+        </button>
+      </form>
+    </Modal>
+  )
+}
 
-        {/* Item Selector */}
-        <div className="flex flex-col bg-bg-surface rounded-xl p-space-md shadow-sm space-y-space-xs">
-          <label className="font-caption-medium text-caption-medium text-text-secondary uppercase tracking-wider">Item for Comparison</label>
-          <div className="flex items-center justify-between gap-space-xs p-space-xs bg-bg-base rounded-lg min-h-[48px] cursor-pointer">
-            <div className="flex items-center gap-space-xs min-w-0">
-              <div className="w-9 h-9 rounded-lg bg-accent-tint flex items-center justify-center shrink-0 text-primary">
-                <span className="material-symbols-outlined text-[20px]" style={{ fontVariationSettings: "'FILL' 1" }}>bakery_dining</span>
-              </div>
+function Sparkline({ points, label }: { points: { at: number; price: number }[]; label: string }) {
+  if (points.length < 2)
+    return (
+      <p className="font-caption text-caption text-text-secondary">Not enough history yet. Update the price over time to see a trend.</p>
+    )
+  const min = Math.min(...points.map((p) => p.price))
+  const max = Math.max(...points.map((p) => p.price))
+  const span = max - min || 1
+  const xy = points.map((p, i) => [(i / (points.length - 1)) * 300, 34 - ((p.price - min) / span) * 28] as const)
+  const d = xy.map(([x, y], i) => `${i ? 'L' : 'M'}${x.toFixed(1)},${y.toFixed(1)}`).join(' ')
+  return (
+    <svg viewBox="0 0 300 40" preserveAspectRatio="none" className="w-full h-12 overflow-visible" role="img" aria-label={label}>
+      <path d={`${d} L300,40 L0,40 Z`} className="fill-accent-tint" />
+      <path
+        d={d}
+        fill="none"
+        strokeWidth="2.5"
+        strokeLinecap="round"
+        strokeLinejoin="round"
+        className="stroke-primary"
+        vectorEffect="non-scaling-stroke"
+      />
+      <circle cx={xy.at(-1)![0]} cy={xy.at(-1)![1]} r="3.5" className="fill-brand-purple" />
+    </svg>
+  )
+}
+
+export default function Supply() {
+  const { state, setPreferredSupplier } = useStore()
+  const toast = useToast()
+  const [params, setParams] = useSearchParams()
+  const items = stockItems(state)
+  const product = productById(state, params.get('item') ?? '') ?? items.find((p) => healthOf(state, p) !== 'healthy') ?? items[0]
+  const prices = useMemo(() => pricesFor(state, product.id), [state, product.id])
+  const preferred = state.preferred[product.id] ?? prices[0]?.supplierId
+  const [selected, setSelected] = useState(preferred)
+  const [modal, setModal] = useState<{ open: boolean; edit?: SupplierPrice }>({ open: false })
+  const [productModalOpen, setProductModalOpen] = useState(false)
+  const selectId = useId()
+
+  useEffect(() => setSelected(state.preferred[product.id] ?? pricesFor(state, product.id)[0]?.supplierId), [product.id]) // eslint-disable-line react-hooks/exhaustive-deps
+
+  const cheapest = prices[0]
+  const dearest = prices.at(-1)
+  const chosen = prices.find((p) => p.supplierId === selected)
+  const applied = selected === state.preferred[product.id]
+
+  return (
+    <div className="w-full px-space-md py-space-md lg:max-w-5xl lg:mx-auto lg:px-space-xl lg:py-space-lg flex flex-col gap-space-md">
+      <h1 className="sr-only">Compare supplier prices</h1>
+
+      {/* Item selector */}
+      <Card className="p-space-md flex flex-col gap-space-sm">
+        <div className="flex items-center justify-between gap-space-sm">
+          <label htmlFor={selectId} className="font-caption-medium text-caption-medium text-text-secondary uppercase tracking-wide">
+            Item to compare
+          </label>
+          <Button variant="ghost" size="sm" icon="add" onClick={() => setProductModalOpen(true)}>
+            Add product
+          </Button>
+        </div>
+        <div className="flex items-center gap-space-sm">
+          <ProductThumb product={product} />
+          <div className="relative flex-1 min-w-0">
+            <select
+              id={selectId}
+              value={product.id}
+              onChange={(e) => setParams({ item: e.target.value }, { replace: true })}
+              className={cx(inputClass, 'appearance-none pr-10 font-label-bold text-label-bold truncate cursor-pointer')}
+            >
+              {items.map((p) => (
+                <option key={p.id} value={p.id}>
+                  {p.name}
+                </option>
+              ))}
+            </select>
+            <Icon name="unfold_more" className="absolute right-space-sm top-1/2 -translate-y-1/2 pointer-events-none text-text-secondary" />
+          </div>
+        </div>
+        <div className="flex flex-wrap items-center gap-space-xs font-caption text-caption text-text-secondary">
+          <StatusBadge health={healthOf(state, product)} />
+          <span>
+            {unitQty(product, available(state, product))} on hand · sold by the {product.packLabel}
+          </span>
+        </div>
+        {cheapest && (
+          <div className="grid grid-cols-2 gap-space-xs">
+            <div className="bg-surface-container-low rounded-lg p-space-sm flex items-center gap-space-xs">
+              <Icon name="trending_down" className="text-best-value" />
               <div className="flex flex-col min-w-0">
-                <span className="font-label-bold text-label-bold text-text-primary truncate">Albany White Bread 700g</span>
-                <span className="font-caption text-caption text-text-secondary truncate">Standard Crate of 10 Loaves</span>
+                <span className="font-caption text-caption text-text-secondary">Lowest unit price</span>
+                <span className="font-label-bold text-label-bold text-text-primary">
+                  {rand(cheapest.unitPrice)} <span className="font-caption text-caption text-text-secondary">/ {product.unit}</span>
+                </span>
               </div>
             </div>
-            <button aria-label="Change Item" className="w-10 h-10 flex items-center justify-center rounded-lg text-primary hover:bg-accent-tint shrink-0" type="button">
-              <span className="material-symbols-outlined text-[22px]">swap_horiz</span>
-            </button>
-          </div>
-          {/* Quick stats */}
-          <div className="grid grid-cols-2 gap-space-xs pt-space-2xs">
-            <div className="bg-surface-container-low rounded-lg p-space-xs flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px] text-secondary">trending_down</span>
-              <div className="flex flex-col">
-                <span className="font-caption text-caption text-text-secondary">Lowest Unit</span>
-                <span className="font-label-bold text-label-bold text-text-primary">R13.20 <span className="font-caption text-caption text-text-secondary font-normal">/ loaf</span></span>
-              </div>
-            </div>
-            <div className="bg-surface-container-low rounded-lg p-space-xs flex items-center gap-2">
-              <span className="material-symbols-outlined text-[18px] text-primary">savings</span>
-              <div className="flex flex-col">
-                <span className="font-caption text-caption text-text-secondary">Potential Save</span>
-                <span className="font-label-bold text-label-bold text-secondary">R13.00 <span className="font-caption text-caption text-text-secondary font-normal">/ 10-pack</span></span>
+            <div className="bg-surface-container-low rounded-lg p-space-sm flex items-center gap-space-xs">
+              <Icon name="savings" className="text-brand-purple" />
+              <div className="flex flex-col min-w-0">
+                <span className="font-caption text-caption text-text-secondary">Saving vs. dearest</span>
+                <span className="font-label-bold text-label-bold text-secondary">
+                  {rand((dearest!.unitPrice - cheapest.unitPrice) * product.packSize)}{' '}
+                  <span className="font-caption text-caption text-text-secondary">/ {product.packLabel}</span>
+                </span>
               </div>
             </div>
           </div>
-        </div>
+        )}
+      </Card>
 
-        {/* Section Header */}
-        <div className="flex items-center justify-between px-space-2xs pt-space-2xs">
-          <div className="flex items-center gap-1.5">
-            <span className="font-label-bold text-label-bold text-text-primary">Wholesale Quotations</span>
-            <span className="px-1.5 py-0.5 rounded-full bg-surface-container text-text-secondary font-caption-medium text-caption-medium">3 available</span>
-          </div>
-          <span className="font-caption text-caption text-text-secondary">Sorted by unit price</span>
-        </div>
+      {/* Quotes */}
+      <div className="flex items-center justify-between px-space-2xs">
+        <h2 className="font-label-bold text-label-bold text-text-primary flex items-center gap-space-xs">
+          Saved supplier prices <Pill>{prices.length}</Pill>
+        </h2>
+        <span className="font-caption text-caption text-text-secondary">Cheapest first</span>
+      </div>
 
-        {/* Supplier Cards */}
-        <div className="flex flex-col space-y-space-sm">
-          {SUPPLIERS.map(s => {
-            const isSelected = selected === s.id
+      {prices.length === 0 ? (
+        <Card>
+          <EmptyState icon="storefront" title="No prices saved for this item" body="Add a quote or invoice price to compare suppliers." />
+        </Card>
+      ) : (
+        <fieldset className="flex flex-col gap-space-sm">
+          <legend className="sr-only">Choose a supplier for {product.name}</legend>
+          {prices.map((p, i) => {
+            const isCheapest = i === 0
+            const delta = p.unitPrice - cheapest.unitPrice
+            const stale = Date.now() - p.updatedAt > STALE_DAYS * 86_400_000
+            const supplier = state.suppliers.find((s) => s.id === p.supplierId)
+            const isSel = selected === p.supplierId
             return (
               <div
-                key={s.id}
-                onClick={() => setSelected(s.id)}
-                className={`relative bg-bg-surface rounded-xl p-space-md shadow-sm transition-all duration-200 cursor-pointer ${isSelected ? '' : 'opacity-90'}`}
+                key={p.id}
+                className={cx(
+                  'relative bg-bg-surface rounded-xl p-space-md shadow-sm border-2 transition-colors',
+                  isSel ? 'border-primary' : 'border-transparent',
+                )}
               >
-                {/* Header row */}
-                <div className="flex items-start justify-between gap-space-xs mb-space-xs">
-                  <div className="flex flex-wrap items-center gap-1.5">
-                    <span className={`inline-flex items-center gap-1 px-2.5 py-1 rounded font-label-bold text-[11px] tracking-wide uppercase shadow-sm ${s.badgeClass}`}>
-                      {s.id === 'jumbo' && <span className="material-symbols-outlined text-[14px]">verified</span>}
-                      {s.badge}
+                <label className="flex items-start gap-space-sm cursor-pointer">
+                  <input
+                    type="radio"
+                    name="supplier"
+                    checked={isSel}
+                    onChange={() => setSelected(p.supplierId)}
+                    className="mt-1 w-5 h-5 accent-primary shrink-0"
+                  />
+                  <span className="flex-1 min-w-0 flex flex-col gap-space-2xs">
+                    <span className="flex flex-wrap items-center gap-space-xs">
+                      {isCheapest ? (
+                        <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-best-value text-on-secondary font-label-bold text-caption-medium uppercase tracking-wide">
+                          <Icon name="verified" size="xs" /> Cheapest
+                        </span>
+                      ) : (
+                        <Pill icon="arrow_upward">
+                          +{rand(delta)} / {product.unit}
+                        </Pill>
+                      )}
+                      {state.preferred[product.id] === p.supplierId && (
+                        <Pill tone="purple" icon="bookmark">
+                          In restock plan
+                        </Pill>
+                      )}
+                      <span
+                        className={cx(
+                          'font-caption text-caption inline-flex items-center gap-0.5',
+                          stale ? 'text-tertiary' : 'text-text-secondary',
+                        )}
+                      >
+                        <Icon name={stale ? 'history' : 'schedule'} size="xs" /> Updated {relativeTime(p.updatedAt)}
+                      </span>
                     </span>
-                    <span className="font-caption text-caption text-text-secondary flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[13px]">schedule</span> {s.timestamp}
+                    <span className="flex items-baseline justify-between gap-space-sm">
+                      <span className="font-label-bold text-label-bold text-text-primary truncate">{supplier?.name}</span>
+                      <span className="font-h1 text-h1 text-text-primary shrink-0">
+                        {rand(p.unitPrice)}
+                        <span className="font-caption text-caption text-text-secondary"> / {product.unit}</span>
+                      </span>
                     </span>
-                  </div>
-                  <div className={`w-6 h-6 rounded-full flex items-center justify-center shrink-0 transition-transform ${isSelected ? 'bg-primary text-on-primary' : 'bg-surface-container text-transparent'}`}>
-                    <span className="material-symbols-outlined text-[16px] font-bold">check</span>
-                  </div>
+                    <span className="flex flex-wrap items-center justify-between gap-space-xs font-caption text-caption text-text-secondary">
+                      <span>
+                        {product.packLabel}:{' '}
+                        <strong className="font-caption-medium text-text-primary">{rand(p.unitPrice * product.packSize)}</strong>
+                        {!isCheapest && ` (+${rand(delta * product.packSize)})`}
+                      </span>
+                      <span className="flex items-center gap-space-sm">
+                        {supplier?.location && (
+                          <span className="inline-flex items-center gap-0.5">
+                            <Icon name="location_on" size="xs" />
+                            {supplier.location}
+                          </span>
+                        )}
+                        {p.minOrder && <span>Min. {unitQty(product, p.minOrder)}</span>}
+                      </span>
+                    </span>
+                  </span>
+                </label>
+                <div className="flex justify-end pt-space-xs">
+                  <Button
+                    variant="ghost"
+                    size="sm"
+                    icon="edit"
+                    onClick={() => setModal({ open: true, edit: p })}
+                    aria-label={`Update ${supplier?.name} price`}
+                  >
+                    Update price
+                  </Button>
                 </div>
-
-                <div className="flex justify-between items-baseline min-w-0">
-                  <h2 className="font-label-bold text-label-bold text-text-primary truncate">{s.name}</h2>
-                  <div className="text-right shrink-0">
-                    <div className="font-h1 text-h1 text-text-primary font-bold">R{s.price.toFixed(2)} <span className="font-caption text-caption text-text-secondary font-normal">/ loaf</span></div>
-                  </div>
-                </div>
-
-                <div className="flex justify-between items-center mt-1 text-text-secondary font-caption text-caption">
-                  <span>Pack of 10: <strong className="text-text-primary font-medium">R{s.packPrice.toFixed(2)}</strong></span>
-                  <span className="inline-flex items-center gap-1 px-2 py-0.5 rounded bg-surface-container-low text-text-primary font-caption-medium">{s.minOrder}</span>
-                </div>
-
-                {s.id === 'jumbo' && (
-                  <div className="flex items-center gap-3 mt-space-xs pt-space-xs text-text-secondary font-caption text-caption">
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[15px] text-primary">location_on</span> {s.location}
-                    </span>
-                    <span className="inline-flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[15px] text-secondary">local_shipping</span> {s.delivery}
-                    </span>
-                  </div>
-                )}
-
-                {s.priceDelta && (
-                  <div className="mt-space-xs pt-space-xs flex items-center justify-between">
-                    <span className="font-caption text-caption text-text-secondary flex items-center gap-1">
-                      <span className="material-symbols-outlined text-[14px]">arrow_upward</span> {s.priceDelta}
-                    </span>
-                    {s.distance && <span className="font-caption text-caption text-text-secondary">{s.distance}</span>}
-                  </div>
-                )}
-
-                {s.warning && (
-                  <div className="mt-space-xs pt-space-xs">
-                    <div className="flex items-center gap-2 p-2 rounded-lg bg-warning-tint text-tertiary">
-                      <span className="material-symbols-outlined text-[18px] text-[#DD6B20] shrink-0">warning</span>
-                      <span className="font-caption-medium text-caption-medium text-text-primary">{s.warning}</span>
-                    </div>
-                  </div>
-                )}
               </div>
             )
           })}
-
-          {/* Add supplier placeholder */}
-          <div
-            onClick={() => setModalOpen(true)}
-            className="w-full min-h-[104px] p-space-md rounded-xl bg-transparent flex items-center justify-center text-center cursor-pointer transition-colors hover:bg-bg-surface/50 active:scale-[0.99]"
-            style={{ border: '2px dashed #CBD5E0' }}
-          >
-            <div className="flex flex-col items-center justify-center space-y-1">
-              <div className="w-10 h-10 rounded-full bg-surface-container flex items-center justify-center text-primary mb-1">
-                <span className="material-symbols-outlined text-[24px]">add_circle</span>
-              </div>
-              <span className="font-label-bold text-label-bold text-text-primary">+ Add new supplier price</span>
-              <span className="font-caption text-caption text-text-secondary">Log quote or invoice from local distributor</span>
-            </div>
-          </div>
-        </div>
-
-        {/* Price Trend Sparkline */}
-        <div className="bg-bg-surface rounded-xl p-space-md shadow-sm space-y-space-xs">
-          <div className="flex items-center justify-between">
-            <span className="font-label-bold text-label-bold text-text-primary">30-Day Price Trend (Albany 700g)</span>
-            <span className="font-caption-medium text-caption-medium text-secondary flex items-center gap-0.5">
-              <span className="material-symbols-outlined text-[16px]">south_east</span> -4.3%
-            </span>
-          </div>
-          <div className="w-full h-12 flex items-end">
-            <svg className="w-full h-10 overflow-visible" fill="none" preserveAspectRatio="none" viewBox="0 0 300 40">
-              <path d="M0,15 L40,18 L80,12 L120,22 L160,19 L200,28 L240,25 L300,35" stroke="#319795" strokeLinecap="round" strokeLinejoin="round" strokeWidth="2.5" />
-              <path d="M0,15 L40,18 L80,12 L120,22 L160,19 L200,28 L240,25 L300,35 L300,40 L0,40 Z" fill="rgba(49,151,149,0.08)" />
-              <circle cx="300" cy="35" fill="#2F855A" r="3.5" />
-            </svg>
-          </div>
-          <div className="flex justify-between text-text-secondary font-caption text-caption pt-1">
-            <span>1 Month Ago: R13.80</span>
-            <span>Current Best: R13.20</span>
-          </div>
-        </div>
-
-        {/* Apply Button */}
-        <div className="pt-space-xs pb-space-sm">
-          <button
-            onClick={applySupplier}
-            className={`w-full h-12 min-h-[48px] px-space-md rounded-lg text-on-primary font-label-bold text-label-bold flex items-center justify-center gap-2 shadow-sm transition-all duration-150 ${applied ? 'bg-secondary' : 'bg-primary hover:bg-accent-pressed active:bg-accent-pressed'}`}
-            type="button"
-          >
-            <span className="material-symbols-outlined text-[20px]">{applied ? 'check' : 'check_circle'}</span>
-            <span>{applied ? 'Saved to Restock List' : `Apply ${selectedCard.name} to Restock Plan`}</span>
-          </button>
-        </div>
-      </div>
-
-      {/* Add Price Modal */}
-      {modalOpen && (
-        <div
-          className="fixed inset-0 z-50 flex items-end justify-center p-space-md bg-on-background/40 backdrop-blur-sm"
-          onClick={e => { if (e.target === e.currentTarget) setModalOpen(false) }}
-        >
-          <div className="w-full max-w-md bg-bg-surface rounded-2xl p-space-md shadow-xl flex flex-col space-y-space-sm">
-            <div className="flex items-center justify-between">
-              <h3 className="font-h2 text-h2 text-text-primary">Add Supplier Price</h3>
-              <button onClick={() => setModalOpen(false)} aria-label="Close" className="w-8 h-8 rounded-full bg-surface-container flex items-center justify-center text-text-secondary hover:text-text-primary" type="button">
-                <span className="material-symbols-outlined text-[18px]">close</span>
-              </button>
-            </div>
-            <div className="flex flex-col space-y-1">
-              <label className="font-caption-medium text-caption-medium text-text-secondary">Distributor / Supplier Name</label>
-              <input className="h-12 px-space-sm rounded-lg bg-bg-base text-text-primary font-body text-body outline-none focus:bg-surface-container-lowest" placeholder="e.g. Cambridge Food / Local Depot" type="text" />
-            </div>
-            <div className="grid grid-cols-2 gap-space-xs">
-              <div className="flex flex-col space-y-1">
-                <label className="font-caption-medium text-caption-medium text-text-secondary">Pack Price (R)</label>
-                <input className="h-12 px-space-sm rounded-lg bg-bg-base text-text-primary font-body text-body outline-none focus:bg-surface-container-lowest" placeholder="135.00" type="number" />
-              </div>
-              <div className="flex flex-col space-y-1">
-                <label className="font-caption-medium text-caption-medium text-text-secondary">Units Per Pack</label>
-                <input className="h-12 px-space-sm rounded-lg bg-bg-base text-text-primary font-body text-body outline-none focus:bg-surface-container-lowest" type="number" defaultValue={10} />
-              </div>
-            </div>
-            <div className="pt-space-xs">
-              <button onClick={() => setModalOpen(false)} className="w-full h-12 min-h-[48px] rounded-lg bg-primary text-on-primary font-label-bold text-label-bold flex items-center justify-center" type="button">
-                Save & Compare
-              </button>
-            </div>
-          </div>
-        </div>
+        </fieldset>
       )}
-    </main>
+
+      {/* Dashed outline is reserved for this add placeholder (PRD 6.1) */}
+      <button
+        type="button"
+        onClick={() => setModal({ open: true })}
+        className="w-full min-h-24 p-space-md rounded-xl border-2 border-dashed border-border-disabled flex flex-col items-center justify-center gap-space-2xs text-center hover:bg-bg-surface hover:border-primary transition-colors"
+      >
+        <span className="w-10 h-10 rounded-full bg-accent-tint text-primary flex items-center justify-center">
+          <Icon name="add" size="lg" />
+        </span>
+        <span className="font-label-bold text-label-bold text-text-primary">Add supplier price</span>
+        <span className="font-caption text-caption text-text-secondary">Log a quote or invoice price from a supplier</span>
+      </button>
+
+      {chosen && (
+        <Card className="p-space-md flex flex-col gap-space-xs">
+          <div className="flex items-center justify-between gap-space-sm">
+            <h2 className="font-label-bold text-label-bold text-text-primary truncate">
+              Price history · {supplierName(state, chosen.supplierId)}
+            </h2>
+            {chosen.history.length > 1 &&
+              (() => {
+                const first = chosen.history[0].price
+                const change = ((chosen.unitPrice - first) / first) * 100
+                return (
+                  <span
+                    className={cx(
+                      'font-caption-medium text-caption-medium inline-flex items-center gap-0.5 shrink-0',
+                      change <= 0 ? 'text-secondary' : 'text-error-default',
+                    )}
+                  >
+                    <Icon name={change <= 0 ? 'south_east' : 'north_east'} size="sm" /> {change > 0 ? '+' : ''}
+                    {change.toFixed(1)}%
+                  </span>
+                )
+              })()}
+          </div>
+          <Sparkline points={chosen.history} label={`Price history: ${chosen.history.map((h) => rand(h.price)).join(', ')}`} />
+          {chosen.history.length > 1 && (
+            <div className="flex justify-between font-caption text-caption text-text-secondary">
+              <span>
+                {relativeTime(chosen.history[0].at)}: {rand(chosen.history[0].price)}
+              </span>
+              <span>Now: {rand(chosen.unitPrice)}</span>
+            </div>
+          )}
+        </Card>
+      )}
+
+      {chosen && (
+        <Button
+          block
+          variant={applied ? 'success' : 'primary'}
+          icon={applied ? 'check' : 'playlist_add_check'}
+          disabled={applied}
+          onClick={() => {
+            setPreferredSupplier(product.id, chosen.supplierId)
+            toast(`${supplierName(state, chosen.supplierId)} will be used for ${product.name} in your restock plan.`)
+          }}
+        >
+          {applied
+            ? `Using ${supplierName(state, chosen.supplierId)} in restock plan`
+            : `Use ${supplierName(state, chosen.supplierId)} in restock plan`}
+        </Button>
+      )}
+
+      <PriceModal product={product} open={modal.open} initial={modal.edit} onClose={() => setModal({ open: false })} />
+      <ProductModal
+        open={productModalOpen}
+        onClose={() => setProductModalOpen(false)}
+        onCreated={(created) => {
+          setProductModalOpen(false)
+          setParams({ item: created.id }, { replace: true })
+        }}
+      />
+    </div>
   )
 }

@@ -1,6 +1,7 @@
 @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL,GRAD@24,400,0,0&display=swap');
-@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:wght,FILL@100..700,0..1&display=swap');
+/* One request covers every icon variation used (FILL toggled per icon). `block` avoids
+   flashing ligature names like "inventory_2" before the icon font arrives. */
+@import url('https://fonts.googleapis.com/css2?family=Material+Symbols+Outlined:opsz,wght,FILL@20..48,400..700,0..1&display=block');
 @import 'tailwindcss';
 
 @theme {
@@ -11,40 +12,50 @@
   --radius-xl: 0.75rem;
   --radius-full: 9999px;
 
-  /* Brand colors */
+  /* Neutrals */
   --color-bg-base: #FAF9F6;
   --color-bg-surface: #FFFFFF;
   --color-text-primary: #2D3748;
-  --color-text-secondary: #718096;
+  /* Darkened from #718096 so small captions pass WCAG AA (≈5.9:1 on bg-base). */
+  --color-text-secondary: #586377;
   --color-border-default: #E2E8F0;
   --color-border-disabled: #CBD5E0;
-  --color-accent-tint: #E6FFFA;
-  --color-accent-pressed: #2C7A7B;
+
+  /* StockEvo brand: blue → purple → dark green */
+  --color-primary: #2E4BD8;
+  --color-on-primary: #ffffff;
+  --color-primary-container: #4A5FE6;
+  --color-on-primary-container: #ffffff;
+  --color-accent-tint: #EEF1FE;
+  --color-accent-pressed: #2338B0;
+  --color-brand-purple: #7A3FD0;
+  --color-brand-purple-tint: #F4EEFD;
+  --color-brand-green: #0F5B4A;
+  --color-brand-green-tint: #E7F4EF;
+
+  /* Status indicators (unchanged) */
   --color-success-tint: #F0FFF4;
   --color-warning-tint: #FFFAF0;
   --color-error-tint: #FFF5F5;
   --color-error-default: #C53030;
+  --color-warning-default: #DD6B20;
+  --color-best-value: #2F855A;
 
   /* Material Design tokens */
-  --color-primary: #006766;
-  --color-on-primary: #ffffff;
-  --color-primary-container: #0a8280;
-  --color-on-primary-container: #f3fffe;
   --color-secondary: #0a6c44;
   --color-on-secondary: #ffffff;
   --color-secondary-container: #9ff5c1;
   --color-on-secondary-container: #167249;
+  --color-secondary-fixed: #9ff5c1;
+  --color-secondary-fixed-dim: #83d8a6;
   --color-tertiary: #994200;
   --color-on-tertiary: #ffffff;
-  --color-tertiary-container: #bf5503;
-  --color-on-tertiary-container: #fffbff;
   --color-error: #ba1a1a;
   --color-on-error: #ffffff;
   --color-error-container: #ffdad6;
   --color-on-error-container: #93000a;
   --color-surface: #f9f9ff;
   --color-surface-dim: #d0daf0;
-  --color-surface-bright: #f9f9ff;
   --color-surface-container-lowest: #ffffff;
   --color-surface-container-low: #f0f3ff;
   --color-surface-container: #e7eeff;
@@ -54,25 +65,9 @@
   --color-on-surface-variant: #3e4948;
   --color-inverse-surface: #273141;
   --color-inverse-on-surface: #ebf1ff;
+  --color-inverse-primary: #B8C3FF;
   --color-outline: #6e7978;
-  --color-outline-variant: #bdc9c8;
-  --color-surface-tint: #006a68;
-  --color-inverse-primary: #77d6d3;
-  --color-background: #f9f9ff;
   --color-on-background: #121c2c;
-  --color-surface-variant: #d9e3f9;
-  --color-primary-fixed: #94f2f0;
-  --color-primary-fixed-dim: #77d6d3;
-  --color-on-primary-fixed: #00201f;
-  --color-on-primary-fixed-variant: #00504e;
-  --color-secondary-fixed: #9ff5c1;
-  --color-secondary-fixed-dim: #83d8a6;
-  --color-on-secondary-fixed: #002111;
-  --color-on-secondary-fixed-variant: #005231;
-  --color-tertiary-fixed: #ffdbca;
-  --color-tertiary-fixed-dim: #ffb68f;
-  --color-on-tertiary-fixed: #331100;
-  --color-on-tertiary-fixed-variant: #773200;
 
   /* Spacing */
   --spacing-space-2xs: 0.25rem;
@@ -85,14 +80,53 @@
   --spacing-gutter-desktop: 1.5rem;
   --spacing-margin: 1rem;
   --spacing-margin-desktop: 2rem;
+  --spacing-tap: 3rem; /* NFR7: 48px minimum tap target */
+
+  /* Elevation */
+  --shadow-bar-up: 0 -2px 8px rgb(45 55 72 / 0.08);
+  --shadow-bar-down: 0 1px 8px rgb(0 0 0 / 0.04);
+  --shadow-float: 0 4px 16px rgb(45 55 72 / 0.16);
+}
+
+/* Fixed chrome heights. Screens never hard-code these; the AppShell applies them once. */
+:root {
+  --app-header-h: 4rem;
+  --app-nav-h: 4rem;
+  --safe-top: env(safe-area-inset-top, 0px);
+  --safe-bottom: env(safe-area-inset-bottom, 0px);
+}
+
+@utility pt-app-header { padding-top: calc(var(--app-header-h) + var(--safe-top)); }
+@utility pb-app-nav { padding-bottom: calc(var(--app-nav-h) + var(--safe-bottom)); }
+@utility bottom-app-nav { bottom: calc(var(--app-nav-h) + var(--safe-bottom)); }
+@utility bottom-fab { bottom: calc(var(--app-nav-h) + var(--safe-bottom) + 1rem); }
+@utility top-app-header { top: calc(var(--app-header-h) + var(--safe-top)); }
+@utility pb-safe { padding-bottom: var(--safe-bottom); }
+@utility pt-safe { padding-top: var(--safe-top); }
+
+@utility bg-brand-gradient {
+  background-image: linear-gradient(125deg, var(--color-primary) 0%, var(--color-brand-purple) 55%, var(--color-brand-green) 100%);
+}
+@utility text-brand-gradient {
+  background-image: linear-gradient(100deg, var(--color-primary), var(--color-brand-purple) 60%, var(--color-brand-green));
+  background-clip: text;
+  color: transparent;
+}
+
+/* Icon sizes for Material Symbols */
+@utility icon-xs { font-size: 14px; }
+@utility icon-sm { font-size: 16px; }
+@utility icon-md { font-size: 20px; }
+@utility icon-lg { font-size: 24px; }
+@utility icon-xl { font-size: 32px; }
+@utility icon-filled { font-variation-settings: 'FILL' 1; }
+
+@utility no-scrollbar {
+  scrollbar-width: none;
+  &::-webkit-scrollbar { display: none; }
 }
 
 @layer utilities {
-  .pb-safe { padding-bottom: env(safe-area-inset-bottom, 0px); }
-  .pt-safe { padding-top: env(safe-area-inset-top, 0px); }
-  .no-scrollbar { scrollbar-width: none; }
-  .no-scrollbar::-webkit-scrollbar { display: none; }
-
   .text-display { font-size: 28px; line-height: 34px; letter-spacing: -0.02em; font-weight: 700; }
   .text-h1 { font-size: 22px; line-height: 26px; letter-spacing: -0.01em; font-weight: 700; }
   .text-h2 { font-size: 18px; line-height: 22px; letter-spacing: -0.005em; font-weight: 600; }
@@ -112,10 +146,26 @@
 html, body {
   font-family: 'Inter', system-ui, sans-serif;
   overscroll-behavior: none;
-  min-height: max(884px, 100dvh);
   margin: 0;
   padding: 0;
   width: 100%;
+  min-height: 100dvh;
+  background: var(--color-bg-base);
 }
 
-::-webkit-scrollbar { display: none; }
+/* Visible keyboard focus for every interactive element (mouse clicks stay clean). */
+:where(button, a, input, select, textarea, label, [tabindex]):focus-visible {
+  outline: 2px solid var(--color-primary);
+  outline-offset: 2px;
+  border-radius: var(--radius-lg);
+}
+:where(input, select, textarea):focus-visible { outline-offset: 0; }
+
+.material-symbols-outlined {
+  user-select: none;
+  line-height: 1;
+}
+
+@media (prefers-reduced-motion: reduce) {
+  *, *::before, *::after { transition-duration: 0.01ms !important; animation-duration: 0.01ms !important; }
+}
