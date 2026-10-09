@@ -1,10 +1,5 @@
 import { db } from "./db.js";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY,
-);
+import { createClient } from '@supabase/supabase-js';
 
 export async function enqueueSync(entityType, entityID, operation, payload) {
   await db.execute(
@@ -31,8 +26,20 @@ export async function processSyncQueue() {
   for (const item of pendingItems) {
     try {
       const payload = JSON.parse(item.payload_json);
-
-      if (item.operation === "insert") {
+      
+      if (item.entity_type === "stock_movements") {
+        const { error } = await supabase.rpc (
+          "record_stock_movement",
+          {
+            p_movement_id: item.entity_id,
+            p_stock_item_id: payload.stock_item_id,
+            p_quantity: payload.quantity_delta  
+          }
+         );
+        if (error) {
+          throw error; 
+          }
+      } else if (item.operation === "insert") {
         const { error } = await supabase.from(item.entity_type).insert(payload);
 
         if (error) {
