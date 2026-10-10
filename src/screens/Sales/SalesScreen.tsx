@@ -1,4 +1,4 @@
-import React, { useState } from 'react'
+import React, { useState, useRef, useEffect } from 'react'
 import {
   View,
   Text,
@@ -19,6 +19,8 @@ import { CATEGORIES, type Category, type Product } from './data/salesData'
 import { styles } from './styles'
 import { useSalesData } from './useSalesData'
 import { useStore } from '../../store'
+import { deductionsFor } from '../../data/inventory'
+import { track } from '../../lib/telemetry'
 
 interface CartItem {
   id: string
@@ -33,19 +35,41 @@ export default function SalesScreen() {
   const store = useStore()
   const { PRODUCTS } = useSalesData()
   const [category, setCategory] = useState<Category>('all')
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: 'bread', name: 'White Bread 700g', unit: 17, qty: 1 },
-    { id: 'kota', name: 'Kota Special', unit: 35, qty: 1, hasRecipe: true },
-  ])
+  const [cart, setCart] = useState<CartItem[]>([])
   const [drawerOpen, setDrawerOpen] = useState(true)
   const [ingredientsOpen, setIngredientsOpen] = useState(true)
   const [toastVisible, setToastVisible] = useState(false)
   const [confirmedTotal, setConfirmedTotal] = useState(0)
+  const saleStartedAt = useRef<number | null>(null)
+  const pendingCheck = useRef<{ saleId: string; expected: [string, number][]; before: Record<string, number> } | null>(null)
 
   const total = cart.reduce((s, i) => s + i.unit * i.qty, 0)
 
+  // BR1 check: compare the stock change that actually committed against what the
+  // recipe predicted, once the store has applied it.
+  useEffect(() => {
+    const check = pendingCheck.current
+    if (!check) return
+    pendingCheck.current = null
+    for (const [productId, expected] of check.expected) {
+      const after = store.state.products.find((p) => p.id === productId)?.stock ?? 0
+      const actual = Math.round((check.before[productId] - after) * 1000) / 1000
+      track('deduction_check', {
+        saleId: check.saleId,
+        productId,
+        expected,
+        actual,
+        match: Math.abs(actual - expected) < 1e-6,
+      })
+    }
+  }, [store.state])
+
   function addToCart(p: Product) {
     if (p.disabled) return
+    if (cart.length === 0) {
+      saleStartedAt.current = Date.now()
+      track('sale_started')
+    }
     setCart(prev => {
       const ex = prev.find(i => i.id === p.id)
       if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
@@ -59,15 +83,34 @@ export default function SalesScreen() {
   }
 
   function confirmSale() {
-    const confirmedTotal = total
+    const saleTotal = total
     const lines = cart.map((i) => ({ productId: i.id, qty: i.qty }))
-    const result = store.recordSale(lines)
-    if (result.ok) {
-      setCart([])
-      setConfirmedTotal(confirmedTotal)
-      setToastVisible(true)
-      setTimeout(() => setToastVisible(false), 2800)
+    if (!lines.length) return
+
+    const expected = [...deductionsFor(store.state, lines)]
+    const before: Record<string, number> = {}
+    for (const [productId] of expected) {
+      before[productId] = store.state.products.find((p) => p.id === productId)?.stock ?? 0
     }
+    const startedAt = saleStartedAt.current
+
+    const result = store.recordSale(lines)
+    if (!result.ok) return
+
+    const saleId = `sale-${Date.now()}`
+    pendingCheck.current = { saleId, expected, before }
+    track('sale_confirmed', {
+      saleId,
+      duration_ms: startedAt === null ? null : Date.now() - startedAt,
+      itemCount: lines.length,
+      total: saleTotal,
+    })
+    saleStartedAt.current = null
+
+    setCart([])
+    setConfirmedTotal(saleTotal)
+    setToastVisible(true)
+    setTimeout(() => setToastVisible(false), 2800)
   }
 
   return (
