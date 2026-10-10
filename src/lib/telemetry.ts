@@ -19,7 +19,7 @@ type BufferedEvent = {
   created_at: string
 }
 
-const QUEUE_KEY = 'stockevo-telemetry-queue'
+export const QUEUE_KEY = 'stockevo-telemetry-queue'
 /** Older events are dropped first; the analysis only needs recent sessions. */
 const MAX_QUEUED = 500
 
@@ -55,6 +55,19 @@ async function getClient() {
 /** Fire-and-forget. Safe to call from a render-blocking path like confirming a sale. */
 export function track(type: TelemetryType, data: Record<string, unknown> = {}) {
   void enqueue(type, data)
+}
+
+/** Correlates the events belonging to one sale. */
+export function newSaleId() {
+  return `sale-${Date.now().toString(36)}-${Math.random().toString(36).slice(2, 8)}`
+}
+
+/**
+ * Reading the clock lives here rather than in the screen: the React Compiler
+ * treats Date.now() inside a component as an impure render-time call.
+ */
+export function trackSaleConfirmed(startedAt: number | null, data: Record<string, unknown>) {
+  track('sale_confirmed', { ...data, duration_ms: startedAt === null ? null : Date.now() - startedAt })
 }
 
 async function enqueue(type: TelemetryType, data: Record<string, unknown>) {

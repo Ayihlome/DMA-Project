@@ -20,7 +20,7 @@ import { styles } from './styles'
 import { useSalesData } from './useSalesData'
 import { useStore } from '../../store'
 import { deductionsFor } from '../../data/inventory'
-import { track } from '../../lib/telemetry'
+import { track, newSaleId, trackSaleConfirmed } from '../../lib/telemetry'
 
 interface CartItem {
   id: string
@@ -64,12 +64,19 @@ export default function SalesScreen() {
     }
   }, [store.state])
 
-  function addToCart(p: Product) {
-    if (p.disabled) return
-    if (cart.length === 0) {
+  // A sale begins when the cart stops being empty, and the clock resets once it
+  // is cleared, so sale_started is emitted exactly once per sale.
+  useEffect(() => {
+    if (cart.length > 0 && saleStartedAt.current === null) {
       saleStartedAt.current = Date.now()
       track('sale_started')
+    } else if (cart.length === 0) {
+      saleStartedAt.current = null
     }
+  }, [cart.length])
+
+  function addToCart(p: Product) {
+    if (p.disabled) return
     setCart(prev => {
       const ex = prev.find(i => i.id === p.id)
       if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
@@ -97,14 +104,9 @@ export default function SalesScreen() {
     const result = store.recordSale(lines)
     if (!result.ok) return
 
-    const saleId = `sale-${Date.now()}`
+    const saleId = newSaleId()
     pendingCheck.current = { saleId, expected, before }
-    track('sale_confirmed', {
-      saleId,
-      duration_ms: startedAt === null ? null : Date.now() - startedAt,
-      itemCount: lines.length,
-      total: saleTotal,
-    })
+    trackSaleConfirmed(startedAt, { saleId, itemCount: lines.length, total: saleTotal })
     saleStartedAt.current = null
 
     setCart([])
