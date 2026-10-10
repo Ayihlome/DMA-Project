@@ -5,6 +5,7 @@
  */
 import type { AppState, CategoryKey, Product, Profile, Purchase, PurchaseLine, SaleLine, SyncOp } from './types'
 import { deductionsFor, productById, unitQty } from './inventory'
+import type { BackupStatus } from '../lib/cloudBackup'
 
 export type Result = { ok: true; message: string } | { ok: false; message: string }
 
@@ -38,6 +39,10 @@ export type StoreApi = {
   setPreferredSupplier: (productId: string, supplierId: string) => void
   setBudget: (n: number) => void
   updateProfile: (p: Partial<Profile>) => void
+  /** Whether the last snapshot upload succeeded. Never optimistic. */
+  backupStatus: BackupStatus
+  /** Uploads a snapshot now instead of waiting for the debounce. */
+  backUpNow: () => void
   /** Async so the mobile store can await device storage; the web store resolves immediately. */
   setPhoto: (productId: string, dataUrl: string) => Promise<Result>
   removePhoto: (productId: string) => void
@@ -46,7 +51,10 @@ export type StoreApi = {
 
 export const STATE_KEY = 'stockevo-state-v1'
 export const PHOTO_KEY = 'stockevo-photos'
-export const SYNC_DELAY_MS = 1500
+/** Which account the state on this device belongs to, so a second owner signing in here never inherits it. */
+export const OWNER_KEY = 'stockevo-owner'
+/** How long to wait after a change before uploading a snapshot. */
+export const BACKUP_DEBOUNCE_MS = 5000
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -60,8 +68,8 @@ export function isValidState(x: unknown): x is AppState {
   return !!x && typeof x === 'object' && (x as AppState).version === 1
 }
 
-/** There is no backend yet, so acknowledging queued operations is simulated. */
-export function markSynced(s: AppState, now = Date.now()): AppState {
+/** Called once a snapshot upload has actually succeeded, never on a timer. */
+export function markBackedUp(s: AppState, now = Date.now()): AppState {
   return {
     ...s,
     queue: s.queue.map((q) => (q.status === 'pending' ? { ...q, status: 'synced' as const } : q)).slice(-50),

@@ -9,7 +9,7 @@ import { colors, spacing, radius, type } from '../../theme/theme'
 import { useStore } from '../../store'
 import { useAuth } from '../../providers/AuthProvider'
 import { supabase } from '../../lib/supabase'
-import { actions, dashboardKpis, longDate, rand } from '../../core'
+import { actions, dashboardKpis, longDate, rand, relativeTime } from '../../core'
 import { QUEUE_KEY } from '../../lib/telemetry'
 
 /** Alert's buttons do nothing on web, so confirmation falls back to window.confirm. */
@@ -42,6 +42,7 @@ export default function ProfileScreen() {
   const [exporting, setExporting] = useState(false)
 
   const kpis = dashboardKpis(state)
+  const backedUp = store.backupStatus === 'backed-up'
 
   function saveProfile() {
     store.updateProfile({ ownerName: ownerName.trim() || state.profile.ownerName, storeName: storeName.trim() || state.profile.storeName })
@@ -84,7 +85,8 @@ export default function ProfileScreen() {
         notify('Could not delete the account', `${error.message}. Check your connection and try again.`)
         return
       }
-      await AsyncStorage.multiRemove([actions.STATE_KEY, actions.PHOTO_KEY, QUEUE_KEY]).catch(() => {})
+      // The shop_backups row goes with the auth.users row via on delete cascade
+      await AsyncStorage.multiRemove([actions.STATE_KEY, actions.PHOTO_KEY, actions.OWNER_KEY, QUEUE_KEY]).catch(() => {})
       // The session is already invalid server-side; this clears the local token.
       await signOut().catch(() => {})
     } finally {
@@ -121,18 +123,32 @@ export default function ProfileScreen() {
               <Text style={styles.name}>{state.profile.ownerName}</Text>
               <Text style={styles.meta}>{state.profile.role} · {state.profile.storeName}</Text>
               <Text style={styles.meta}>Member since {longDate(state.profile.memberSince)}</Text>
-              {/* States only what is true: shop data is not uploaded yet, so this
-                  deliberately does not read the simulated sync queue. */}
+              {/* "Backed up" appears only once an upload has actually succeeded */}
               <View style={styles.storageRow}>
                 <MaterialIcons
-                  name={store.online ? 'save' : 'cloud_off'}
+                  name={backedUp ? 'cloud_done' : store.online ? 'save' : 'cloud_off'}
                   size={16}
-                  color={store.online ? colors.secondary : colors.warningDefault}
+                  color={backedUp ? colors.secondary : colors.textSecondary}
                 />
                 <Text style={styles.storageText}>
-                  {store.online ? 'Saved on this device' : 'Offline · saved on this device'}
+                  {backedUp
+                    ? `Backed up ${relativeTime(state.lastSyncedAt)}`
+                    : store.online
+                      ? 'Saved on this device'
+                      : 'Offline · saved on this device'}
                 </Text>
               </View>
+              {!backedUp && store.online && (
+                <TouchableOpacity onPress={store.backUpNow} disabled={store.backupStatus === 'pushing'} style={styles.backupLink}>
+                  <Text style={styles.backupLinkText}>
+                    {store.backupStatus === 'pushing'
+                      ? 'Backing up…'
+                      : store.backupStatus === 'error'
+                        ? 'Backup failed · try again'
+                        : 'Back up now'}
+                  </Text>
+                </TouchableOpacity>
+              )}
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.btn, styles.btnGhost, { marginTop: spacing.sm }]}>
                 <MaterialIcons name="edit" size={18} color={colors.primary} />
                 <Text style={styles.btnGhostText}>Edit profile</Text>
@@ -208,6 +224,8 @@ const styles = StyleSheet.create({
   meta: { ...type.caption, color: colors.textSecondary },
   storageRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs2 },
   storageText: { ...type.captionMedium, color: colors.textSecondary },
+  backupLink: { minHeight: 32, justifyContent: 'center' },
+  backupLinkText: { ...type.captionMedium, color: colors.primary, fontWeight: '700' },
 
   statRow: { flexDirection: 'row', gap: spacing.sm },
   stat: {

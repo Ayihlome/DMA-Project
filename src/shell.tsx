@@ -1,7 +1,7 @@
 import { useEffect, useState } from 'react'
 import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { dashboardKpis } from './core'
+import { dashboardKpis, relativeTime } from './core'
 import { TABS, isTab, titleOf, useNav } from './nav'
 import { useStore } from './store'
 import { Avatar, BrandMark, Icon } from './ui'
@@ -22,13 +22,14 @@ function useTick(ms = 30_000) {
 /** Reports where data is stored, without blocking work. */
 export function SyncStatus({ compact }: { compact?: boolean }) {
   useTick()
-  const { online } = useStore()
-  // Shop data is not uploaded anywhere yet: the queue in AppState is drained by a
-  // timer, not by a backend. Claiming "Synced" off that would be untrue, so this
-  // reports only what is certain until the cloud backup in the scope lands.
+  const { online, backupStatus, state } = useStore()
+  // "Backed up" is shown only once an upload has actually succeeded, never
+  // optimistically off a local queue.
   const view = !online
     ? { icon: 'cloud_off', text: 'Offline · saved on this device', short: 'Offline', bg: colors.warningTint, fg: colors.tertiary }
-    : { icon: 'save', text: 'Saved on this device', short: 'On device', bg: colors.successTint, fg: colors.secondary }
+    : backupStatus === 'backed-up'
+      ? { icon: 'cloud_done', text: `Backed up ${relativeTime(state.lastSyncedAt)}`, short: 'Backed up', bg: colors.successTint, fg: colors.secondary }
+      : { icon: 'save', text: 'Saved on this device', short: 'On device', bg: colors.accentTint, fg: colors.primary }
   return (
     <View style={[styles.sync, { backgroundColor: view.bg }]} accessible accessibilityLabel={view.text}>
       <Icon name={view.icon} size="xs" color={view.fg} />

@@ -46,15 +46,19 @@ export default function PrivacyScreen() {
 
         <Section heading="Where it is kept">
           <Text style={styles.body}>
-            Your shop&apos;s products, stock, sales and orders are saved on this device only. The app
-            never needs the network to record a sale, and that data is not copied to the cloud yet,
-            so if you lose this phone that history is gone with it. Cloud backup is planned, and
-            this notice will be updated before it is switched on.
+            Everything is saved on this device first, so the app never needs the network to record a
+            sale. When you are online, a copy of your shop&apos;s products, stock, sales and orders is
+            also backed up to a Supabase database, so you can get it back if this phone is lost. The
+            Profile screen tells you whether that backup has actually been made.
           </Text>
           <Text style={styles.body}>
-            Your account details and the measurements described below are stored in a Supabase
-            database. Access rules there mean each account can only ever read and write its own
-            rows.
+            The backup is a copy, not a shared workspace: it is restored only onto a device signed
+            in to your account, and only when that device has no shop data of its own. Access rules
+            on the database mean each account can only ever read and write its own rows.
+          </Text>
+          <Text style={styles.body}>
+            Product photos you add are the exception. They stay on the device that took them and are
+            never uploaded, so they are not restored onto a new phone.
           </Text>
         </Section>
 
@@ -78,8 +82,9 @@ export default function PrivacyScreen() {
           <Text style={styles.body}>
             You may see your data, correct it, or have it deleted. Your name and shop details can be
             edited on the Profile screen. To delete everything, use &quot;Delete my account&quot; on the
-            Profile screen: it removes your account and every row belonging to it from the database,
-            and erases your shop&apos;s data from this device. This cannot be undone.
+            Profile screen: it removes your account, your backup and every row belonging to it from
+            the database, and erases your shop&apos;s data and photos from this device. This cannot be
+            undone.
           </Text>
         </Section>
 

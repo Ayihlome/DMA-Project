@@ -1,9 +1,10 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
+import { StoreProvider } from '@/store';
 import { colors } from '@/theme/theme';
 
 // Pages opened on top of the tabs get a header with a back button
@@ -19,14 +20,36 @@ import { runMigration } from '../backend/data/local/db';
 SplashScreen.preventAutoHideAsync();
 runMigration()
 
+function Loading() {
+  return (
+    <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center', backgroundColor: colors.bgBase }}>
+      <ActivityIndicator size="large" color={colors.primary} />
+    </View>
+  );
+}
+
 export default function RootLayout() {
   const colorScheme = useColorScheme();
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <RootNavigator />
+        <StoreGate />
       </AuthProvider>
     </ThemeProvider>
+  );
+}
+
+/**
+ * Scopes the store to the signed-in account. Passing the owner id down lets the
+ * store restore that owner's backup before seeding, and stops state left by a
+ * previous account on this device being adopted by the next one.
+ */
+function StoreGate() {
+  const { session } = useAuth();
+  return (
+    <StoreProvider ownerId={session?.user?.id ?? null} fallback={<Loading />}>
+      <RootNavigator />
+    </StoreProvider>
   );
 }
 
