@@ -1,11 +1,13 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useEffect, useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { StoreProvider } from '@/store';
 import { colors } from '@/theme/theme';
+import { runMigration } from '../backend/data/local/db';
 
 // Pages opened on top of the tabs get a header with a back button
 const pageHeader = {
@@ -15,10 +17,7 @@ const pageHeader = {
   headerTitleStyle: { color: colors.textPrimary },
   headerShadowVisible: false,
 };
-import { runMigration } from '../backend/data/local/db';
-
 SplashScreen.preventAutoHideAsync();
-runMigration()
 
 function Loading() {
   return (
@@ -30,6 +29,19 @@ function Loading() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
+  const [dbReady, setDbReady] = useState(false);
+
+  // Awaited rather than fired at module scope, so no screen can open before the
+  // tables exist. A failure is logged rather than blocking the app forever; on
+  // web this resolves immediately (see db.web.js).
+  useEffect(() => {
+    runMigration()
+      .catch((e) => console.warn('Database migration failed', e))
+      .finally(() => setDbReady(true));
+  }, []);
+
+  if (!dbReady) return <Loading />;
+
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
