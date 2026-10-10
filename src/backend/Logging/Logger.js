@@ -6,7 +6,7 @@ function write(level, tag, message, data) {
   const time = new Date().toISOString();
   const payload = data !== undefined ? JSON.stringify(data) : "";
   console.log(
-    `[${time}] [${level.toUpperCase()}] [${tag}] &{message} ${payload}`,
+    `[${time}] [${level.toUpperCase()}] [${tag}] ${message} ${payload}`,
   );
 }
 

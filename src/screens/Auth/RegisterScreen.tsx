@@ -1,6 +1,8 @@
 import React, { useState } from 'react'
-import { Text } from 'react-native'
-import { router } from 'expo-router'
+import { Text, View, TouchableOpacity } from 'react-native'
+import { router, Link } from 'expo-router'
+import MaterialIcons from '../../components/common/MaterialIcon'
+import { colors } from '../../theme/theme'
 import { supabase } from '../../lib/supabase'
 import { AuthLayout, Field, SubmitButton } from './AuthForm'
 import { styles } from './styles'
@@ -10,6 +12,7 @@ export default function RegisterScreen() {
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [consent, setConsent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
@@ -26,13 +29,20 @@ export default function RegisterScreen() {
       setError('Passwords do not match.')
       return
     }
+    if (!consent) {
+      setError('Please agree to the privacy notice to create an account.')
+      return
+    }
 
     setLoading(true)
     setError(null)
+    // POPIA: the moment consent was given travels as metadata, because the
+    // profile row only exists once the email is verified. The trigger in
+    // 20261010120000_profile_consent.sql copies it into profiles.consent_at.
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim() } },
+      options: { data: { full_name: fullName.trim(), consent_at: new Date().toISOString() } },
     })
     setLoading(false)
 
@@ -91,6 +101,23 @@ export default function RegisterScreen() {
         textContentType="newPassword"
         onSubmitEditing={register}
       />
+      <View style={styles.consentRow}>
+        <TouchableOpacity
+          onPress={() => setConsent(c => !c)}
+          accessibilityRole="checkbox"
+          accessibilityState={{ checked: consent }}
+          accessibilityLabel="Agree to the privacy notice"
+          style={[styles.checkbox, consent && styles.checkboxOn]}
+        >
+          {consent && <MaterialIcons name="check" size={16} color={colors.onPrimary} />}
+        </TouchableOpacity>
+        <Text style={styles.consentText}>
+          I agree that StockMate may store my shop&apos;s stock and sales data to run the app.{' '}
+          <Link href="/privacy">
+            <Text style={styles.consentLink}>Read the privacy notice</Text>
+          </Link>
+        </Text>
+      </View>
       <SubmitButton label="Create account" loading={loading} onPress={register} />
     </AuthLayout>
   )

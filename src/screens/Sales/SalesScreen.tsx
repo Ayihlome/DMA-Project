@@ -1,5 +1,4 @@
-import React, { useState } from 'react'
-import { useCase } from "../../backend/useCases/container"
+import React, { useState, useRef, useEffect } from 'react'
 import {
   View,
   Text,
@@ -16,8 +15,12 @@ import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
 import { colors, spacing, radius, type, shadow, card } from '../../theme/theme'
 
-import { CATEGORIES, PRODUCTS, type Category, type Product } from './data/salesData'
+import { CATEGORIES, type Category, type Product } from './data/salesData'
 import { styles } from './styles'
+import { useSalesData } from './useSalesData'
+import { useStore } from '../../store'
+import { deductionsFor } from '../../data/inventory'
+import { track, newSaleId, trackSaleConfirmed } from '../../lib/telemetry'
 
 interface CartItem {
   id: string
@@ -27,20 +30,50 @@ interface CartItem {
   hasRecipe?: boolean
 }
 
-let cart = []
-
 export default function SalesScreen() {
   const insets = useSafeAreaInsets()
+  const store = useStore()
+  const { PRODUCTS } = useSalesData()
   const [category, setCategory] = useState<Category>('all')
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: 'bread', name: 'White Bread 700g', unit: 17, qty: 1 },
-    { id: 'kota', name: 'Kota Special', unit: 35, qty: 1, hasRecipe: true },
-  ])
+  const [cart, setCart] = useState<CartItem[]>([])
   const [drawerOpen, setDrawerOpen] = useState(true)
   const [ingredientsOpen, setIngredientsOpen] = useState(true)
   const [toastVisible, setToastVisible] = useState(false)
+  const [confirmedTotal, setConfirmedTotal] = useState(0)
+  const saleStartedAt = useRef<number | null>(null)
+  const pendingCheck = useRef<{ saleId: string; expected: [string, number][]; before: Record<string, number> } | null>(null)
 
   const total = cart.reduce((s, i) => s + i.unit * i.qty, 0)
+
+  // BR1 check: compare the stock change that actually committed against what the
+  // recipe predicted, once the store has applied it.
+  useEffect(() => {
+    const check = pendingCheck.current
+    if (!check) return
+    pendingCheck.current = null
+    for (const [productId, expected] of check.expected) {
+      const after = store.state.products.find((p) => p.id === productId)?.stock ?? 0
+      const actual = Math.round((check.before[productId] - after) * 1000) / 1000
+      track('deduction_check', {
+        saleId: check.saleId,
+        productId,
+        expected,
+        actual,
+        match: Math.abs(actual - expected) < 1e-6,
+      })
+    }
+  }, [store.state])
+
+  // A sale begins when the cart stops being empty, and the clock resets once it
+  // is cleared, so sale_started is emitted exactly once per sale.
+  useEffect(() => {
+    if (cart.length > 0 && saleStartedAt.current === null) {
+      saleStartedAt.current = Date.now()
+      track('sale_started')
+    } else if (cart.length === 0) {
+      saleStartedAt.current = null
+    }
+  }, [cart.length])
 
   function addToCart(p: Product) {
     if (p.disabled) return
@@ -57,9 +90,28 @@ export default function SalesScreen() {
   }
 
   function confirmSale() {
+    const saleTotal = total
+    const lines = cart.map((i) => ({ productId: i.id, qty: i.qty }))
+    if (!lines.length) return
+
+    const expected = [...deductionsFor(store.state, lines)]
+    const before: Record<string, number> = {}
+    for (const [productId] of expected) {
+      before[productId] = store.state.products.find((p) => p.id === productId)?.stock ?? 0
+    }
+    const startedAt = saleStartedAt.current
+
+    const result = store.recordSale(lines)
+    if (!result.ok) return
+
+    const saleId = newSaleId()
+    pendingCheck.current = { saleId, expected, before }
+    trackSaleConfirmed(startedAt, { saleId, itemCount: lines.length, total: saleTotal })
+    saleStartedAt.current = null
+
+    setCart([])
+    setConfirmedTotal(saleTotal)
     setToastVisible(true)
-    //example of how to use use cases: starting with the import
-    // const result = await useCases.recordSale({ownerID, items: cartItems})
     setTimeout(() => setToastVisible(false), 2800)
   }
 
@@ -71,7 +123,7 @@ export default function SalesScreen() {
       {toastVisible && (
         <View style={[styles.toast, { top: 72 + insets.top }]}>
           <MaterialIcons name="check_circle" size={20} color="#83d8a6" />
-          <Text style={styles.toastText}>Sale of R{total.toFixed(2)} recorded & stock deducted!</Text>
+          <Text style={styles.toastText}>Sale of R{confirmedTotal.toFixed(2)} recorded & stock deducted!</Text>
         </View>
       )}
 
