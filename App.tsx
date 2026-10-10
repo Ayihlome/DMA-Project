@@ -63,7 +63,7 @@ export default function App() {
 
   return (
     <SafeAreaProvider>
-      <StatusBar style="dark" backgroundColor={colors.bgSurface} />
+      <StatusBar style="dark" />
       <StoreProvider fallback={<Loading />}>
         <NavProvider>
           <AppFrame />
