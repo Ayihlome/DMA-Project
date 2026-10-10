@@ -15,7 +15,7 @@ const parseNumber = (s: string) => (s.trim() === '' ? NaN : Number(s.trim().repl
 export default function ProductEditScreen() {
   const { id = 'new' } = useLocalSearchParams<{ id: string }>()
   const insets = useSafeAreaInsets()
-  const { state, addProduct } = useStore()
+  const { state, addProduct, updateProduct } = useStore()
 
   const existing = id !== 'new' ? state.products.find(p => p.id === id) : undefined
 
@@ -47,19 +47,18 @@ export default function ProductEditScreen() {
     setError(null)
 
     try {
-      if (isNew) {
-        addProduct({
-          name: name.trim(),
-          detail: detail.trim() || unit.trim(),
-          category,
-          price: priceVal,
-          stock: isComposite ? 0 : stockVal,
-          unit: unit.trim(),
-          unitPlural: unit.trim(),
-          packSize: isNaN(packVal) || packVal <= 0 ? 1 : packVal,
-        })
+      const input = {
+        name: name.trim(),
+        detail: detail.trim() || unit.trim(),
+        category,
+        price: priceVal,
+        stock: isComposite ? 0 : stockVal,
+        unit: unit.trim(),
+        unitPlural: unit.trim(),
+        packSize: isNaN(packVal) || packVal <= 0 ? 1 : packVal,
       }
-      // TODO: updateProduct action for editing existing products
+      if (isNew) addProduct(input)
+      else updateProduct(existing.id, input)
       router.back()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong.')

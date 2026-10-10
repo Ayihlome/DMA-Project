@@ -111,6 +111,7 @@ export function StoreProvider({ children, fallback }: { children: ReactNode; fal
         recordSale,
         createOrderList,
         addProduct,
+        updateProduct: (id, input) => update((s) => A.updateProduct(s, id, input)),
         receivePurchase: (id) => update((s) => A.receivePurchase(s, id)),
         cancelPurchase: (id) => update((s) => A.cancelPurchase(s, id)),
         upsertSupplierPrice: (input) => update((s) => A.upsertSupplierPrice(s, input)),
