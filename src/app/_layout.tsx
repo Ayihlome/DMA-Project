@@ -1,6 +1,5 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useEffect, useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
@@ -28,21 +27,6 @@ function Loading() {
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
-  const [dbReady, setDbReady] = useState(false);
-
-  // Imported here rather than at the top of the file so that a missing native
-  // module cannot stop the app booting. op-sqlite has no native code in Expo Go,
-  // where a static import throws and takes this whole route down with it.
-  // Nothing in the UI reads SQLite - screens go through src/store.tsx - so the
-  // app is fully usable without it, and a dev build gets the real thing.
-  useEffect(() => {
-    import('../backend/data/local/db')
-      .then((m) => m.runMigration())
-      .catch((e) => console.warn('SQLite unavailable; continuing without it.', e))
-      .finally(() => setDbReady(true));
-  }, []);
-
-  if (!dbReady) return <Loading />;
 
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
