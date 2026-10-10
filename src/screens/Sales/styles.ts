@@ -4,11 +4,12 @@ import { colors, spacing, radius, type } from '../../theme/theme'
 export const styles = StyleSheet.create({
   screen: { flex: 1, backgroundColor: colors.bgBase },
 
+  searchRow: { flexDirection: 'row', gap: spacing.xs, marginHorizontal: spacing.md },
   searchWrap: {
+    flex: 1,
     flexDirection: 'row',
     alignItems: 'center',
     gap: spacing.xs,
-    marginHorizontal: spacing.md,
     paddingHorizontal: spacing.sm,
     minHeight: 48,
     backgroundColor: colors.bgSurface,
@@ -17,6 +18,16 @@ export const styles = StyleSheet.create({
     borderRadius: radius.md,
   },
   searchInput: { flex: 1, ...type.body, color: colors.textPrimary, paddingVertical: spacing.sm },
+  manageBtn: {
+    width: 48,
+    minHeight: 48,
+    alignItems: 'center',
+    justifyContent: 'center',
+    backgroundColor: colors.bgSurface,
+    borderWidth: 1,
+    borderColor: colors.borderDefault,
+    borderRadius: radius.md,
+  },
 
   chipScroll: { flexGrow: 0 },
   chips: { paddingHorizontal: spacing.md, paddingVertical: spacing.sm, gap: spacing.xs },

@@ -2,6 +2,7 @@ import React, { useState } from 'react'
 import { Text } from 'react-native'
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
+import { REAL_AUTH, useAuth } from '../../providers/AuthProvider'
 import { AuthLayout, Field, SubmitButton } from './AuthForm'
 import { styles } from './styles'
 
@@ -12,6 +13,7 @@ export default function RegisterScreen() {
   const [confirm, setConfirm] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+  const { enterApp } = useAuth()
 
   async function register() {
     if (!fullName.trim() || !email.trim() || !password) {
@@ -24,6 +26,10 @@ export default function RegisterScreen() {
     }
     if (password !== confirm) {
       setError('Passwords do not match.')
+      return
+    }
+    if (!REAL_AUTH) {
+      enterApp()
       return
     }
 

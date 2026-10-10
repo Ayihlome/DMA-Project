@@ -21,10 +21,10 @@ async function signOutOrExplain(signOut: AuthState['signOut']) {
 function confirmSignOut(signOut: AuthState['signOut']) {
   if (Platform.OS === 'web') {
     // Alert buttons aren't supported on web
-    if (window.confirm('Sign out of Bongani Spaza?')) signOutOrExplain(signOut)
+    if (window.confirm('Sign out of StockEvo?')) signOutOrExplain(signOut)
     return
   }
-  Alert.alert('Sign out', 'Sign out of Bongani Spaza?', [
+  Alert.alert('Sign out', 'Sign out of StockEvo?', [
     { text: 'Cancel', style: 'cancel' },
     { text: 'Sign out', style: 'destructive', onPress: () => signOutOrExplain(signOut) },
   ])
@@ -38,16 +38,16 @@ export default function AppHeader({ screenLabel }: Props) {
     <View style={[styles.container, { paddingTop: insets.top }]}>
       <View style={styles.inner}>
         <View style={styles.left}>
-          <Text style={styles.shopName}>Bongani Spaza</Text>
+          <Text style={styles.shopName}>StockEvo</Text>
           <Text style={styles.screenLabel}>{screenLabel}</Text>
         </View>
         <TouchableOpacity
-          style={styles.signOut}
+          style={styles.avatar}
           onPress={() => confirmSignOut(signOut)}
           activeOpacity={0.7}
           accessibilityLabel="Sign out"
         >
-          <MaterialIcons name="person" size={20} color={colors.primary} />
+          <MaterialIcons name="person" size={18} color={colors.onPrimary} />
         </TouchableOpacity>
       </View>
     </View>
@@ -69,13 +69,11 @@ const styles = StyleSheet.create({
   left: { flex: 1, minWidth: 0 },
   shopName: { ...type.captionMedium, color: colors.textSecondary },
   screenLabel: { ...type.display, color: colors.textPrimary },
-  signOut: {
+  avatar: {
     width: 44,
     height: 44,
     borderRadius: 22,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    backgroundColor: colors.bgSurface,
+    backgroundColor: colors.primary,
     alignItems: 'center',
     justifyContent: 'center',
   },

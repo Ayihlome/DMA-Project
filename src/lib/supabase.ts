@@ -1,6 +1,6 @@
 import 'expo-sqlite/localStorage/install';
-import { createClient } from '@supabase/supabase-js';
 import { AppState } from 'react-native';
+import { createClient } from '@supabase/supabase-js';
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;

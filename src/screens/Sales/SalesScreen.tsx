@@ -1,186 +1,244 @@
 import React, { useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, TextInput } from 'react-native'
+import { useCase } from "../../backend/useCases/container"
+import {
+  View,
+  Text,
+  ScrollView,
+  TouchableOpacity,
+  TextInput,
+  Image,
+  FlatList,
+  Modal,
+  Animated,
+} from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
-import { colors } from '../../theme/theme'
+import { colors, spacing, radius, type, shadow, card } from '../../theme/theme'
+
 import { CATEGORIES, PRODUCTS, type Category, type Product } from './data/salesData'
 import { styles } from './styles'
 
-const rand = (n: number) => `R${n.toFixed(2)}`
+interface CartItem {
+  id: string
+  name: string
+  unit: number
+  qty: number
+  hasRecipe?: boolean
+}
+
+let cart = []
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets()
   const [category, setCategory] = useState<Category>('all')
-  const [search, setSearch] = useState('')
-  const [cart, setCart] = useState<Record<string, number>>({})
-  const [cartOpen, setCartOpen] = useState(false)
-  const [lastSale, setLastSale] = useState<number | null>(null)
+  const [cart, setCart] = useState<CartItem[]>([
+    { id: 'bread', name: 'White Bread 700g', unit: 17, qty: 1 },
+    { id: 'kota', name: 'Kota Special', unit: 35, qty: 1, hasRecipe: true },
+  ])
+  const [drawerOpen, setDrawerOpen] = useState(true)
+  const [ingredientsOpen, setIngredientsOpen] = useState(true)
+  const [toastVisible, setToastVisible] = useState(false)
 
-  const query = search.trim().toLowerCase()
-  const shown = PRODUCTS.filter(
-    p => (category === 'all' || p.category === category) && (!query || p.name.toLowerCase().includes(query))
-  )
-  const lines = PRODUCTS.filter(p => cart[p.id])
-  const itemCount = lines.reduce((s, p) => s + cart[p.id], 0)
-  const total = lines.reduce((s, p) => s + p.price * cart[p.id], 0)
+  const total = cart.reduce((s, i) => s + i.unit * i.qty, 0)
 
-  function add(p: Product) {
-    if (p.needsRecipe) return
-    setLastSale(null)
-    setCart(c => ({ ...c, [p.id]: (c[p.id] ?? 0) + 1 }))
+  function addToCart(p: Product) {
+    if (p.disabled) return
+    setCart(prev => {
+      const ex = prev.find(i => i.id === p.id)
+      if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
+      return [...prev, { id: p.id, name: p.name, unit: p.price, qty: 1, hasRecipe: p.hasRecipe }]
+    })
+    setDrawerOpen(true)
   }
 
   function changeQty(id: string, delta: number) {
-    setCart(c => {
-      const qty = (c[id] ?? 0) + delta
-      const next = { ...c }
-      if (qty <= 0) delete next[id]
-      else next[id] = qty
-      return next
-    })
+    setCart(prev => prev.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0))
   }
 
-  function recordSale() {
-    setLastSale(total)
-    setCart({})
-    setCartOpen(false)
+  function confirmSale() {
+    setToastVisible(true)
+    //example of how to use use cases: starting with the import
+    // const result = await useCases.recordSale({ownerID, items: cartItems})
+    setTimeout(() => setToastVisible(false), 2800)
   }
 
   return (
     <View style={styles.screen}>
-      <AppHeader screenLabel="Sell" />
+      <AppHeader screenLabel="Sales" />
 
-      <View style={styles.searchWrap}>
-        <MaterialIcons name="search" size={20} color={colors.textSecondary} />
-        <TextInput
-          style={styles.searchInput}
-          value={search}
-          onChangeText={setSearch}
-          placeholder="Find an item"
-          placeholderTextColor={colors.textSecondary}
-          returnKeyType="search"
-        />
-      </View>
+      {/* Toast */}
+      {toastVisible && (
+        <View style={[styles.toast, { top: 72 + insets.top }]}>
+          <MaterialIcons name="check_circle" size={20} color="#83d8a6" />
+          <Text style={styles.toastText}>Sale of R{total.toFixed(2)} recorded & stock deducted!</Text>
+        </View>
+      )}
 
-      <ScrollView
-        horizontal
-        showsHorizontalScrollIndicator={false}
-        contentContainerStyle={styles.chips}
-        style={styles.chipScroll}
-      >
-        {CATEGORIES.map(c => {
-          const active = category === c.key
-          return (
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + drawerOpenHeight(drawerOpen, cart) }]} showsVerticalScrollIndicator={false}>
+        {/* Search */}
+        <View style={styles.searchBar}>
+          <View style={styles.searchInput}>
+            <MaterialIcons name="search" size={22} color={colors.textSecondary} />
+            <TextInput
+              style={styles.searchText}
+              placeholder="Search item or scan barcode..."
+              placeholderTextColor={colors.textSecondary}
+            />
+          </View>
+          <TouchableOpacity style={styles.scanBtn} activeOpacity={0.8}>
+            <MaterialIcons name="qr_code_scanner" size={24} color={colors.onPrimaryContainer} />
+          </TouchableOpacity>
+        </View>
+
+        {/* Category pills */}
+        <FlatList
+          horizontal
+          data={CATEGORIES}
+          keyExtractor={c => c.key}
+          showsHorizontalScrollIndicator={false}
+          contentContainerStyle={styles.categoryList}
+          renderItem={({ item: c }) => (
             <TouchableOpacity
-              key={c.key}
               onPress={() => setCategory(c.key)}
-              style={[styles.chip, active && styles.chipActive]}
+              style={[styles.categoryPill, category === c.key && styles.categoryPillActive]}
               activeOpacity={0.8}
             >
-              <Text style={[styles.chipText, active && styles.chipTextActive]}>{c.label}</Text>
+              <Text style={[styles.categoryText, category === c.key && styles.categoryTextActive]}>{c.label}</Text>
+              {category === c.key && <View style={styles.categoryDot} />}
             </TouchableOpacity>
-          )
-        })}
-      </ScrollView>
+          )}
+        />
 
-      <ScrollView
-        contentContainerStyle={[styles.grid, { paddingBottom: insets.bottom + 220 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
-      >
-        {lastSale !== null && (
-          <View style={styles.saved}>
-            <MaterialIcons name="check_circle" size={20} color={colors.secondary} />
-            <Text style={styles.savedText}>Sale of {rand(lastSale)} recorded. Stock updated.</Text>
-          </View>
-        )}
+        {/* Grid header */}
+        <View style={styles.gridHeader}>
+          <Text style={styles.gridTitle}>Quick Tap Catalog</Text>
+          <Text style={styles.gridHint}>Tap card to add +1</Text>
+        </View>
 
-        {shown.length === 0 && <Text style={styles.empty}>No items match &ldquo;{search}&rdquo;.</Text>}
-
-        {shown.map(p => {
-          const qty = cart[p.id] ?? 0
-          const lowStock = p.stock !== null && p.stock < 10
-          return (
+        {/* Product grid */}
+        <View style={styles.grid}>
+          {PRODUCTS.map(p => (
             <TouchableOpacity
               key={p.id}
-              onPress={() => add(p)}
-              disabled={p.needsRecipe}
-              style={[styles.tile, qty > 0 && styles.tileSelected, p.needsRecipe && styles.tileDisabled]}
-              activeOpacity={0.7}
-              accessibilityLabel={`Add ${p.name}`}
+              onPress={() => addToCart(p)}
+              disabled={p.disabled}
+              style={[styles.productCard, p.disabled && styles.productCardDisabled]}
+              activeOpacity={0.8}
             >
-              <View style={styles.tileTop}>
-                <View style={styles.tileIcon}>
-                  <MaterialIcons name={p.icon} size={22} color={colors.primary} />
-                </View>
-                {qty > 0 && (
-                  <View style={styles.qtyBadge}>
-                    <Text style={styles.qtyBadgeText}>{qty}</Text>
+              <View style={styles.productImageWrap}>
+                <Image source={{ uri: p.uri }} style={[styles.productImage, p.disabled && { opacity: 0.4 }]} />
+                {p.disabled && (
+                  <View style={styles.lockedOverlay}>
+                    <MaterialIcons name="lock" size={28} color={colors.error} />
+                  </View>
+                )}
+                {p.badge && !p.disabled && (
+                  <View style={[styles.productBadge, { backgroundColor: p.badgeBg }]}>
+                    <Text style={[styles.productBadgeText, { color: p.badgeText }]}>{p.badge}</Text>
                   </View>
                 )}
               </View>
-              <Text style={styles.tileName} numberOfLines={1}>{p.name}</Text>
-              <Text style={styles.tileSize} numberOfLines={1}>{p.size}</Text>
-              <Text style={styles.tilePrice}>{rand(p.price)}</Text>
-              {p.needsRecipe ? (
-                <Text style={styles.tileWarn}>Add a recipe to sell this</Text>
-              ) : p.stock === null ? (
-                <Text style={styles.tileStock}>Made to order</Text>
+              <Text style={styles.productName} numberOfLines={1}>{p.name}</Text>
+              <Text style={styles.productCategory} numberOfLines={1}>{p.category}</Text>
+              {p.disabled && p.disabledReason ? (
+                <View style={styles.disabledWarning}>
+                  <MaterialIcons name="warning" size={12} color={colors.errorDefault} />
+                  <Text style={styles.disabledWarningText}>{p.disabledReason}</Text>
+                </View>
               ) : (
-                <Text style={[styles.tileStock, lowStock && { color: colors.warningDefault }]}>{p.stock} in stock</Text>
+                <View style={styles.productFooter}>
+                  <Text style={styles.productPrice}>R{p.price.toFixed(2)}</Text>
+                  <View style={styles.addBtn}>
+                    <Text style={styles.addBtnText}>+</Text>
+                  </View>
+                </View>
               )}
             </TouchableOpacity>
-          )
-        })}
+          ))}
+        </View>
       </ScrollView>
 
-      {/* Cart */}
-      <View style={[styles.cart, { paddingBottom: insets.bottom + 72 }]}>
-        {itemCount === 0 ? (
-          <Text style={styles.cartHint}>Tap an item to add it to the sale.</Text>
-        ) : (
-          <>
-            <TouchableOpacity onPress={() => setCartOpen(o => !o)} style={styles.cartHeader} activeOpacity={0.7}>
-              <Text style={styles.cartTitle}>
-                {itemCount} {itemCount === 1 ? 'item' : 'items'}
-              </Text>
-              <View style={styles.cartToggle}>
-                <Text style={styles.cartToggleText}>{cartOpen ? 'Hide' : 'Show'}</Text>
-                <MaterialIcons name={cartOpen ? 'expand_more' : 'expand_less'} size={18} color={colors.primary} />
+      {/* Cart Drawer */}
+      <View style={[styles.drawer, { bottom: insets.bottom + 64 }]}>
+        {/* Handle */}
+        <TouchableOpacity onPress={() => setDrawerOpen(o => !o)} style={styles.drawerHandle} activeOpacity={0.9}>
+          <View style={styles.drawerPill} />
+          <View style={styles.drawerHeaderRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: spacing.xs }}>
+              <Text style={styles.drawerTitle}>Current Cart</Text>
+              <View style={styles.cartBadge}>
+                <Text style={styles.cartBadgeText}>{cart.length} items</Text>
               </View>
-            </TouchableOpacity>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 4 }}>
+              <Text style={styles.drawerToggleText}>{drawerOpen ? 'Hide details' : 'Show items'}</Text>
+              <MaterialIcons name={drawerOpen ? 'keyboard_arrow_down' : 'keyboard_arrow_up'} size={20} color={colors.textSecondary} />
+            </View>
+          </View>
+        </TouchableOpacity>
 
-            {cartOpen && (
-              <ScrollView style={styles.cartList}>
-                {lines.map(p => (
-                  <View key={p.id} style={styles.cartLine}>
-                    <View style={{ flex: 1 }}>
-                      <Text style={styles.cartName}>{p.name}</Text>
-                      {p.recipe && <Text style={styles.cartRecipe}>Uses: {p.recipe}</Text>}
-                    </View>
-                    <View style={styles.stepper}>
-                      <TouchableOpacity onPress={() => changeQty(p.id, -1)} style={styles.stepBtn} accessibilityLabel={`Remove one ${p.name}`}>
-                        <MaterialIcons name="remove" size={18} color={colors.textPrimary} />
-                      </TouchableOpacity>
-                      <Text style={styles.stepQty}>{cart[p.id]}</Text>
-                      <TouchableOpacity onPress={() => changeQty(p.id, 1)} style={styles.stepBtn} accessibilityLabel={`Add one ${p.name}`}>
-                        <MaterialIcons name="add" size={18} color={colors.textPrimary} />
-                      </TouchableOpacity>
-                    </View>
-                    <Text style={styles.cartLineTotal}>{rand(p.price * cart[p.id])}</Text>
-                  </View>
-                ))}
-              </ScrollView>
+        {drawerOpen && (
+          <ScrollView style={styles.drawerBody} showsVerticalScrollIndicator={false}>
+            {cart.map(item => (
+              <View key={item.id} style={styles.cartItem}>
+                <View style={{ flex: 1 }}>
+                  <Text style={styles.cartItemName}>{item.name}</Text>
+                  <Text style={styles.cartItemUnit}>Unit: R{item.unit.toFixed(2)}</Text>
+                </View>
+                <View style={styles.stepper}>
+                  <TouchableOpacity onPress={() => changeQty(item.id, -1)} style={styles.stepperBtn}>
+                    <MaterialIcons name="remove" size={20} color={colors.textPrimary} />
+                  </TouchableOpacity>
+                  <Text style={styles.stepperQty}>{item.qty}</Text>
+                  <TouchableOpacity onPress={() => changeQty(item.id, 1)} style={styles.stepperBtn}>
+                    <MaterialIcons name="add" size={20} color={colors.textPrimary} />
+                  </TouchableOpacity>
+                </View>
+                <Text style={styles.cartItemTotal}>R{(item.unit * item.qty).toFixed(2)}</Text>
+              </View>
+            ))}
+            {cart.find(i => i.id === 'kota') && (
+              <TouchableOpacity onPress={() => setIngredientsOpen(o => !o)} style={styles.recipeRow} activeOpacity={0.8}>
+                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
+                  <MaterialIcons name="inventory" size={16} color={colors.primary} />
+                  <Text style={styles.recipeLabel}>Ingredient deductions</Text>
+                </View>
+                <MaterialIcons name={ingredientsOpen ? 'expand_less' : 'expand_more'} size={16} color={colors.textSecondary} />
+              </TouchableOpacity>
             )}
-
-            <TouchableOpacity onPress={recordSale} style={styles.recordBtn} activeOpacity={0.85}>
-              <Text style={styles.recordText}>Record sale</Text>
-              <Text style={styles.recordTotal}>{rand(total)}</Text>
-            </TouchableOpacity>
-          </>
+            {ingredientsOpen && cart.find(i => i.id === 'kota') && (
+              <Text style={styles.recipeText}>Quarter loaf, 50g polony, 1 slice cheese, 100g slap chips will be deducted.</Text>
+            )}
+          </ScrollView>
         )}
+
+        {/* Sale Total */}
+        <View style={styles.saleTotal}>
+          <View style={styles.saleSummaryRow}>
+            <View style={{ flexDirection: 'row', alignItems: 'center', gap: 8 }}>
+              <Text style={styles.saleSummaryLabel}>Summary ({cart.length} items)</Text>
+              <View style={styles.cashPill}>
+                <Text style={styles.cashPillText}>Cash Sale</Text>
+              </View>
+            </View>
+            <View style={{ flexDirection: 'row', alignItems: 'baseline', gap: 4 }}>
+              <Text style={styles.saleSummaryLabel}>Total:</Text>
+              <Text style={styles.saleTotal2}>R{total.toFixed(2)}</Text>
+            </View>
+          </View>
+          <TouchableOpacity onPress={confirmSale} style={styles.confirmBtn} activeOpacity={0.85}>
+            <MaterialIcons name="payments" size={20} color={colors.onPrimary} />
+            <Text style={styles.confirmBtnText}>Confirm Sale (R{total.toFixed(2)})</Text>
+          </TouchableOpacity>
+        </View>
       </View>
     </View>
   )
 }
+
+function drawerOpenHeight(open: boolean, cart: CartItem[]) {
+  if (!open) return 160
+  return Math.min(400, 160 + cart.length * 80)
+}
+

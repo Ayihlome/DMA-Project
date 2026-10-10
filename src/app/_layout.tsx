@@ -4,6 +4,16 @@ import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
+import { colors } from '@/theme/theme';
+
+// Pages opened on top of the tabs get a header with a back button
+const pageHeader = {
+  headerShown: true,
+  headerStyle: { backgroundColor: colors.bgBase },
+  headerTintColor: colors.primary,
+  headerTitleStyle: { color: colors.textPrimary },
+  headerShadowVisible: false,
+};
 
 SplashScreen.preventAutoHideAsync();
 
@@ -19,8 +29,7 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { session, recovering, loading } = useAuth();
-  const signedIn = !!session && !recovering;
+  const { signedIn, loading } = useAuth();
 
   // Keep the splash up until we know whether a saved session exists
   if (loading) return null;
@@ -30,6 +39,8 @@ function RootNavigator() {
       <Stack screenOptions={{ headerShown: false }}>
         <Stack.Protected guard={signedIn}>
           <Stack.Screen name="(tabs)" />
+          <Stack.Screen name="products/index" options={{ ...pageHeader, title: 'Products' }} />
+          <Stack.Screen name="products/[id]" options={pageHeader} />
         </Stack.Protected>
         <Stack.Protected guard={!signedIn}>
           <Stack.Screen name="sign-in" />

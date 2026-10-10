@@ -5,6 +5,7 @@ import { supabase } from '@/lib/supabase';
 
 export type AuthState = {
   session: Session | null;
+  signedIn: boolean;
   // True after a password-reset code is verified: Supabase has signed the user in,
   // but they stay on the reset screen until the new password is saved
   recovering: boolean;
@@ -15,6 +16,7 @@ export type AuthState = {
 
 const AuthContext = createContext<AuthState>({
   session: null,
+  signedIn: false,
   recovering: false,
   loading: true,
   finishRecovery: () => {},
@@ -44,6 +46,7 @@ export function AuthProvider({ children }: { children: ReactNode }) {
 
   const value: AuthState = {
     session,
+    signedIn: !!session && !recovering,
     recovering,
     loading,
     finishRecovery: () => setRecovering(false),

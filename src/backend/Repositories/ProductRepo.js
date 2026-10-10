@@ -1,0 +1,51 @@
+import { db } from "../data/local/db";
+import { enqueueSync } from "../data/local/syncqueue";
+
+class ProductRepository {
+  async getByID(productID) {
+    const { rows } = await db.execute(`select * from products where id = ?`, [
+      productID,
+    ]);
+    return rows[0] ?? null;
+  }
+
+  async getAll() {
+    const { rows } = await db.execute(`select * from products`);
+    return rows ?? null;
+  }
+
+  async create(product) {
+    const now = new Date().toISOString();
+    await db.execute(
+      `insert into products (id, name, sku, unit, is_composite, selling_price, created_at, updated_at, is_deleted) values (?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+      [
+        product.id,
+        product.name,
+        product.sku,
+        product.unit,
+        product.isComposite ? 1 : 0,
+        product.sellingPrice,
+        now,
+        now,
+      ],
+    );
+
+    await enqueueSync("products", product.id, "insert", product);
+    return product;
+  }
+
+  async update(productID, changes) {
+    const now = new Date().toISOString();
+    const fields = Object.keys(changes);
+    const setClause = fields.map((f) => `${f} = ?`).join(", ");
+
+    await db.execute(
+      `update products set ${setClause}, updated_at = ? where id = ?`,
+      [...fields.map((f) => changes[f]), now, productID],
+    );
+
+    await enqueueSync("products", productID, "update", changes);
+  }
+}
+
+export default ProductRepo;
