@@ -1,0 +1,29 @@
+{
+  "expo": {
+    "name": "StockEvo",
+    "slug": "stockevo",
+    "version": "1.0.0",
+    "orientation": "portrait",
+    "userInterfaceStyle": "light",
+    "backgroundColor": "#FAF9F6",
+    "ios": {
+      "supportsTablet": true,
+      "bundleIdentifier": "com.stockevo.app"
+    },
+    "android": {
+      "package": "com.stockevo.app"
+      
+    },
+    "plugins": [
+      "expo-font",
+      [
+        "expo-image-picker",
+        {
+          "photosPermission": "StockEvo uses your photos so you can set your own product pictures."
+        }
+      ],
+      "expo-sharing",
+      "expo-status-bar"
+    ]
+  }
+}

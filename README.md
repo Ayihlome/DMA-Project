@@ -1,2 +1,20 @@
-# DMA-Project
-an offline-first mobile application designed for spaza shops, tuck shops, and small township food vendors. It replaces manual, memory-based stock management with structured stock tracking, sales logging, KPI monitoring, supplier price comparison, and explainable restocking recommendations — built around the realities of low connectivity, load-shedding, and limited digital literacy.
+
+1. Install dependencies
+
+   ```bash
+   npm install
+   ```
+
+2. Start the app
+
+   ```bash
+   npx expo start
+   ```
+
+
+```bash
+npm run reset-project
+```
+
+This command will move the starter code to the **app-example** directory and create a blank **app** directory where you can start developing.
+
