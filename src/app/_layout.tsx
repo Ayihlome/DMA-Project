@@ -4,8 +4,10 @@ import { useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
+import { runMigration } from '../backend/data/local/db';
 
 SplashScreen.preventAutoHideAsync();
+runMigration()
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();

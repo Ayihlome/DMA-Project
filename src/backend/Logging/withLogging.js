@@ -4,7 +4,7 @@ import { logger } from "./Logger";
 
 export function withLogging(name, useCase) {
   return async function (input) {
-    const start = new Date.now();
+    const start = Date.now();
     logger.info(name, "called", { input });
     try {
       const result = await useCase(input);

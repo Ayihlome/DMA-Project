@@ -8,6 +8,9 @@ import Product from "../domain/Product";
  *     unit: string,
  *     isComposite: boolean,
  *     sellingPrice: number,
+ *     category?: string,
+ *     packSize?: number,
+ *     openingStock?: number,
  *   }
  *
  * Output (success): { success: true, product: Product }
@@ -25,6 +28,12 @@ export function createCreateProductUseCase({ productRepository }) {
         errors: ["sellingPrice must be a non-negative number"],
       };
     }
+    if (input.packSize != null && input.packSize <= 0) {
+      return { success: false, errors: ["packSize must be greater than 0"] };
+    }
+    if (input.openingStock != null && input.openingStock < 0) {
+      return { success: false, errors: ["openingStock cannot be negative"] };
+    }
 
     const product = new Product({
       id: crypto.randomUUID(),
@@ -33,6 +42,9 @@ export function createCreateProductUseCase({ productRepository }) {
       unit: input.unit,
       isComposite: input.isComposite,
       sellingPrice: input.sellingPrice,
+      category: input.category ?? null,
+      packSize: input.packSize ?? 1,
+      openingStock: input.openingStock ?? 0,
     });
 
     try {

@@ -1,7 +1,7 @@
 // Imports all engines and repos so that they can be called  by the frontendthrough a 'useCases' import
 
 //logging
-import { withLogging } from "./Logging/withLogging";
+import { withLogging } from "../Logging/withLogging";
 
 // Repositories
 import KPISnapshotRepo from "../Repositories/KPISnapshotRepo";
@@ -25,6 +25,11 @@ import { createPreviewSaleDeductionUseCase } from "./previewSalleableProduct";
 import { createCreateProductUseCase } from "./createProduct";
 import { createCreateSupplierUseCase } from "./createSupplier";
 import { createSetRecipeComponentsUseCase } from "./setRecipeComponents";
+import {
+  createReceiveStockUseCase,
+  createSetOpeningStockUseCase,
+} from "./stock";
+import { createSetSupplierPriceUseCase } from "./setSupplierPrice";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -60,6 +65,8 @@ const rawUseCases = {
     restockEngine,
     kpiSnapshotRepository,
     supplierPriceRepository,
+    productRepository,
+    stockRepository,
   }),
   previewSaleDeductions: createPreviewSaleDeductionUseCase({
     recipeEngine,
@@ -70,6 +77,11 @@ const rawUseCases = {
   setRecipeComponents: createSetRecipeComponentsUseCase({
     recipeRepository,
     productRepository,
+  }),
+  receiveStock: createReceiveStockUseCase({ stockRepository }),
+  setOpeningStock: createSetOpeningStockUseCase({ stockRepository }),
+  setSupplierPrice: createSetSupplierPriceUseCase({
+    supplierPriceRepository,
   }),
 };
 

@@ -18,10 +18,12 @@ export function createGetDashboardKpiUseCase({
     const products = await productRepository.getAll();
     const snapshots = [];
 
-    for (const product of products) {
-      const snapshot = kpiCalculator.generateSnapshot(product.id);
-      snapshots.push(snapshot);
-    }
+    const snapshot = await Promise.all(
+      products
+        .filter((p) => !p.is_composite)
+        .map((p) => kpiCalculator.generateSnapshot(p.id)),
+    );
+    snapshots.push(snapshot);
 
     return snapshots;
   };
