@@ -7,7 +7,6 @@ import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { StoreProvider } from '@/store';
 import { colors } from '@/theme/theme';
-import { runMigration } from '../backend/data/local/db';
 
 // Pages opened on top of the tabs get a header with a back button
 const pageHeader = {
@@ -31,12 +30,15 @@ export default function RootLayout() {
   const colorScheme = useColorScheme();
   const [dbReady, setDbReady] = useState(false);
 
-  // Awaited rather than fired at module scope, so no screen can open before the
-  // tables exist. A failure is logged rather than blocking the app forever; on
-  // web this resolves immediately (see db.web.js).
+  // Imported here rather than at the top of the file so that a missing native
+  // module cannot stop the app booting. op-sqlite has no native code in Expo Go,
+  // where a static import throws and takes this whole route down with it.
+  // Nothing in the UI reads SQLite - screens go through src/store.tsx - so the
+  // app is fully usable without it, and a dev build gets the real thing.
   useEffect(() => {
-    runMigration()
-      .catch((e) => console.warn('Database migration failed', e))
+    import('../backend/data/local/db')
+      .then((m) => m.runMigration())
+      .catch((e) => console.warn('SQLite unavailable; continuing without it.', e))
       .finally(() => setDbReady(true));
   }, []);
 
