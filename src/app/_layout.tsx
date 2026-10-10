@@ -51,6 +51,9 @@ function RootNavigator() {
           <Stack.Screen name="forgot-password" />
           <Stack.Screen name="reset-password" />
         </Stack.Protected>
+        {/* Outside both guards: reachable from the consent checkbox before
+            sign-up and from Profile afterwards */}
+        <Stack.Screen name="privacy" options={{ ...pageHeader, title: 'Privacy' }} />
       </Stack>
       <AnimatedSplashOverlay />
     </>
