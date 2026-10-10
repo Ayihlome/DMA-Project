@@ -121,6 +121,18 @@ export default function ProfileScreen() {
               <Text style={styles.name}>{state.profile.ownerName}</Text>
               <Text style={styles.meta}>{state.profile.role} · {state.profile.storeName}</Text>
               <Text style={styles.meta}>Member since {longDate(state.profile.memberSince)}</Text>
+              {/* States only what is true: shop data is not uploaded yet, so this
+                  deliberately does not read the simulated sync queue. */}
+              <View style={styles.storageRow}>
+                <MaterialIcons
+                  name={store.online ? 'save' : 'cloud_off'}
+                  size={16}
+                  color={store.online ? colors.secondary : colors.warningDefault}
+                />
+                <Text style={styles.storageText}>
+                  {store.online ? 'Saved on this device' : 'Offline · saved on this device'}
+                </Text>
+              </View>
               <TouchableOpacity onPress={() => setEditing(true)} style={[styles.btn, styles.btnGhost, { marginTop: spacing.sm }]}>
                 <MaterialIcons name="edit" size={18} color={colors.primary} />
                 <Text style={styles.btnGhostText}>Edit profile</Text>
@@ -194,6 +206,8 @@ const styles = StyleSheet.create({
   },
   name: { ...type.h2, color: colors.textPrimary },
   meta: { ...type.caption, color: colors.textSecondary },
+  storageRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs2 },
+  storageText: { ...type.captionMedium, color: colors.textSecondary },
 
   statRow: { flexDirection: 'row', gap: spacing.sm },
   stat: {

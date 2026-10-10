@@ -46,10 +46,15 @@ export default function PrivacyScreen() {
 
         <Section heading="Where it is kept">
           <Text style={styles.body}>
-            Everything is saved on your own device first, so the app keeps working without signal.
-            When you are online it also syncs to a Supabase database so you do not lose it if the
-            phone is lost. Database access rules mean each account can only ever read and write its
-            own rows.
+            Your shop&apos;s products, stock, sales and orders are saved on this device only. The app
+            never needs the network to record a sale, and that data is not copied to the cloud yet,
+            so if you lose this phone that history is gone with it. Cloud backup is planned, and
+            this notice will be updated before it is switched on.
+          </Text>
+          <Text style={styles.body}>
+            Your account details and the measurements described below are stored in a Supabase
+            database. Access rules there mean each account can only ever read and write its own
+            rows.
           </Text>
         </Section>
 
@@ -73,8 +78,8 @@ export default function PrivacyScreen() {
           <Text style={styles.body}>
             You may see your data, correct it, or have it deleted. Your name and shop details can be
             edited on the Profile screen. To delete everything, use &quot;Delete my account&quot; on the
-            Profile screen: it removes your account and every row belonging to it, on the device and
-            in the database. This cannot be undone.
+            Profile screen: it removes your account and every row belonging to it from the database,
+            and erases your shop&apos;s data from this device. This cannot be undone.
           </Text>
         </Section>
 

@@ -1,7 +1,7 @@
-import { useEffect, useRef, useState } from 'react'
-import { Animated, Easing, Pressable, StyleSheet, Text, View } from 'react-native'
+import { useEffect, useState } from 'react'
+import { Pressable, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { dashboardKpis, relativeTime } from './core'
+import { dashboardKpis } from './core'
 import { TABS, isTab, titleOf, useNav } from './nav'
 import { useStore } from './store'
 import { Avatar, BrandMark, Icon } from './ui'
@@ -19,32 +19,19 @@ function useTick(ms = 30_000) {
   }, [ms])
 }
 
-function Spin({ children, on }: { children: React.ReactNode; on?: boolean }) {
-  const v = useRef(new Animated.Value(0)).current
-  useEffect(() => {
-    if (!on) return
-    const loop = Animated.loop(Animated.timing(v, { toValue: 1, duration: 1000, easing: Easing.linear, useNativeDriver: true }))
-    loop.start()
-    return () => loop.stop()
-  }, [on, v])
-  if (!on) return <>{children}</>
-  return <Animated.View style={{ transform: [{ rotate: v.interpolate({ inputRange: [0, 1], outputRange: ['0deg', '360deg'] }) }] }}>{children}</Animated.View>
-}
-
-/** Always shows offline / pending / saved status without blocking work. */
+/** Reports where data is stored, without blocking work. */
 export function SyncStatus({ compact }: { compact?: boolean }) {
   useTick()
-  const { online, pending, state } = useStore()
+  const { online } = useStore()
+  // Shop data is not uploaded anywhere yet: the queue in AppState is drained by a
+  // timer, not by a backend. Claiming "Synced" off that would be untrue, so this
+  // reports only what is certain until the cloud backup in the scope lands.
   const view = !online
-    ? { icon: 'cloud_off', text: pending ? `Offline · ${pending} saved on device` : 'Offline · saved on device', short: 'Offline', bg: colors.warningTint, fg: colors.tertiary }
-    : pending
-      ? { icon: 'sync', text: `Syncing ${pending} ${pending === 1 ? 'change' : 'changes'}`, short: 'Syncing', bg: colors.accentTint, fg: colors.primary, spin: true }
-      : { icon: 'cloud_done', text: `Synced ${relativeTime(state.lastSyncedAt)}`, short: 'Synced', bg: colors.successTint, fg: colors.secondary }
+    ? { icon: 'cloud_off', text: 'Offline · saved on this device', short: 'Offline', bg: colors.warningTint, fg: colors.tertiary }
+    : { icon: 'save', text: 'Saved on this device', short: 'On device', bg: colors.successTint, fg: colors.secondary }
   return (
     <View style={[styles.sync, { backgroundColor: view.bg }]} accessible accessibilityLabel={view.text}>
-      <Spin on={'spin' in view && view.spin}>
-        <Icon name={view.icon} size="xs" color={view.fg} />
-      </Spin>
+      <Icon name={view.icon} size="xs" color={view.fg} />
       <Text style={[type.captionMedium, { color: view.fg }]} numberOfLines={1}>
         {compact ? view.short : view.text}
       </Text>
