@@ -1,9 +1,5 @@
-import 'expo-sqlite/localStorage/install';
+// Web uses the browser's own localStorage; native gets it from expo-sqlite in supabase.ts
 import { createClient } from '@supabase/supabase-js';
-<<<<<<< HEAD
-=======
-import { AppState } from 'react-native';
->>>>>>> 6a1fec879188c19453b4e565b38575b56248725e
 
 const supabaseUrl = process.env.EXPO_PUBLIC_SUPABASE_URL;
 const supabasePublishableKey = process.env.EXPO_PUBLIC_SUPABASE_PUBLISHABLE_KEY;
@@ -23,13 +19,3 @@ export const supabase = createClient(supabaseUrl, supabasePublishableKey, {
     detectSessionInUrl: false,
   },
 });
-<<<<<<< HEAD
-=======
-
-// Refresh the session only while the app is open. Timers don't run reliably in the
-// background on phones, so refreshing resumes (and catches up) when the app comes back.
-AppState.addEventListener('change', (state) => {
-  if (state === 'active') supabase.auth.startAutoRefresh();
-  else supabase.auth.stopAutoRefresh();
-});
->>>>>>> 6a1fec879188c19453b4e565b38575b56248725e

@@ -1,8 +1,13 @@
 import React, { useState } from 'react'
 import { Text } from 'react-native'
+<<<<<<< HEAD
 import { router } from 'expo-router'
 import { supabase } from '../../lib/supabase'
 import { REAL_AUTH, useAuth } from '../../providers/AuthProvider'
+=======
+import { Link, router } from 'expo-router'
+import { supabase } from '../../lib/supabase'
+>>>>>>> 6a1fec879188c19453b4e565b38575b56248725e
 import { AuthLayout, Field, SubmitButton } from './AuthForm'
 import { styles } from './styles'
 
@@ -11,17 +16,23 @@ export default function SignInScreen() {
   const [password, setPassword] = useState('')
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
+<<<<<<< HEAD
   const { enterApp } = useAuth()
+=======
+>>>>>>> 6a1fec879188c19453b4e565b38575b56248725e
 
   async function signIn() {
     if (!email.trim() || !password) {
       setError('Enter your email and password.')
       return
     }
+<<<<<<< HEAD
     if (!REAL_AUTH) {
       enterApp()
       return
     }
+=======
+>>>>>>> 6a1fec879188c19453b4e565b38575b56248725e
     setLoading(true)
     setError(null)
     const { error } = await supabase.auth.signInWithPassword({ email: email.trim(), password })
@@ -66,6 +77,15 @@ export default function SignInScreen() {
         textContentType="password"
         onSubmitEditing={signIn}
       />
+<<<<<<< HEAD
+=======
+      <Link
+        href={{ pathname: '/forgot-password', params: { email: email.trim() } }}
+        style={[styles.switchLink, { alignSelf: 'flex-end' }]}
+      >
+        Forgot password?
+      </Link>
+>>>>>>> 6a1fec879188c19453b4e565b38575b56248725e
       <SubmitButton label="Sign in" loading={loading} onPress={signIn} />
     </AuthLayout>
   )

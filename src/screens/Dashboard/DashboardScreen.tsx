@@ -1,138 +1,95 @@
-import React, { useState } from 'react'
-import {
-  View,
-  Text,
-  ScrollView,
-  TouchableOpacity,
-  Image,
-  FlatList,
-} from 'react-native'
+import React from 'react'
+import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
+import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
-import { colors, spacing, radius, type, shadow, card } from '../../theme/theme'
-import { KPI_CARDS, ACTION_ITEMS } from './data/dashboardData'
+import { colors } from '../../theme/theme'
+import { SUMMARY, LOW_STOCK } from './data/dashboardData'
+import { ITEMS as RESTOCK_ITEMS } from '../Restock/data/restockData'
 import { styles } from './styles'
 
-type DashTab = 'action' | 'all'
+const rand = (n: number) => `R${n.toLocaleString('en-ZA')}`
 
 export default function DashboardScreen() {
-  const [tab, setTab] = useState<DashTab>('action')
   const insets = useSafeAreaInsets()
+  const change = Math.round(((SUMMARY.salesToday - SUMMARY.salesYesterday) / SUMMARY.salesYesterday) * 100)
+  const outSoon = LOW_STOCK.filter(i => i.level === 'out-soon').length
 
   return (
     <View style={styles.screen}>
-      <AppHeader screenLabel="Dashboard" />
-      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 80 }]} showsVerticalScrollIndicator={false}>
+      <AppHeader screenLabel="Today" />
+      <ScrollView
+        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 160 }]}
+        showsVerticalScrollIndicator={false}
+      >
+        {/* Sales today: the one number the owner checks first */}
+        <View style={styles.salesCard}>
+          <Text style={styles.salesLabel}>Sales today</Text>
+          <Text style={styles.salesValue}>{rand(SUMMARY.salesToday)}</Text>
+          <Text style={styles.salesChange}>
+            {change >= 0 ? `${change}% more than yesterday` : `${Math.abs(change)}% less than yesterday`}
+          </Text>
+        </View>
 
-        {/* Greeting */}
-        <View style={styles.greetRow}>
-          <View style={{ flex: 1 }}>
-            <Text style={styles.greeting}>Sawubona, Bongani 👋</Text>
-            <Text style={styles.greetingSub}>Ready for trade at Bongani Spaza</Text>
+        <View style={styles.statRow}>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Stock value</Text>
+            <Text style={styles.statValue}>{rand(SUMMARY.stockValue)}</Text>
+            <Text style={styles.statNote}>{SUMMARY.itemCount} items</Text>
           </View>
-          <View style={styles.syncPill}>
-            <View style={styles.syncDot} />
-            <Text style={styles.syncText}>✓ Synced just now</Text>
+          <View style={styles.stat}>
+            <Text style={styles.statLabel}>Next restock</Text>
+            <Text style={styles.statValue}>{SUMMARY.nextRestock}</Text>
+            <Text style={styles.statNote}>{RESTOCK_ITEMS.length} items on the list</Text>
           </View>
         </View>
 
-        {/* KPI Cards horizontal scroll */}
-        <FlatList
-          horizontal
-          data={KPI_CARDS}
-          keyExtractor={i => i.label}
-          showsHorizontalScrollIndicator={false}
-          contentContainerStyle={styles.kpiList}
-          renderItem={({ item }) => (
-            <View style={styles.kpiCard}>
-              <View style={styles.kpiTop}>
-                <Text style={styles.kpiLabel}>{item.label}</Text>
-                <View style={[styles.kpiIconWrap, { backgroundColor: item.iconBg }]}>
-                  <MaterialIcons name={item.iconName} size={15} color={item.iconColor} />
-                </View>
-              </View>
-              <View>
-                <Text style={[styles.kpiValue, { color: item.subColor === colors.errorDefault ? colors.errorDefault : colors.textPrimary }]}>
-                  {item.value}
-                </Text>
-                <View style={{ flexDirection: 'row', alignItems: 'center', gap: 2, marginTop: 2 }}>
-                  {item.subIcon && <MaterialIcons name={item.subIcon} size={13} color={item.subColor} />}
-                  <Text style={[styles.kpiSub, { color: item.subColor }]}>{item.sub}</Text>
-                </View>
-              </View>
-            </View>
-          )}
-        />
-
-        {/* Tabs */}
-        <View style={styles.tabRow}>
-          <View style={styles.tabBar}>
-            <TouchableOpacity
-              onPress={() => setTab('action')}
-              style={[styles.tab, tab === 'action' && styles.tabActive]}
-              activeOpacity={0.8}
-            >
-              {tab === 'action' && <View style={styles.alertDot} />}
-              <Text style={[styles.tabText, tab === 'action' && styles.tabTextActive]}>Action Needed (4)</Text>
-            </TouchableOpacity>
-            <TouchableOpacity
-              onPress={() => setTab('all')}
-              style={[styles.tab, tab === 'all' && styles.tabActive]}
-              activeOpacity={0.8}
-            >
-              <Text style={[styles.tabText, tab === 'all' && styles.tabTextActive]}>All Inventory</Text>
-            </TouchableOpacity>
-          </View>
-          <TouchableOpacity style={styles.sortBtn} activeOpacity={0.7}>
-            <MaterialIcons name="sort" size={20} color={colors.textSecondary} />
-          </TouchableOpacity>
+        {/* Running low */}
+        <View style={styles.sectionHeader}>
+          <Text style={styles.sectionTitle}>Running low</Text>
+          <Text style={styles.sectionNote}>{outSoon} will run out today</Text>
         </View>
 
-        {/* Inventory list */}
         <View style={styles.list}>
-          {ACTION_ITEMS.map(item => (
-            <View key={item.id} style={styles.itemCard}>
-              <View style={[styles.itemThumb, { backgroundColor: item.rowBg }]}>
-                <Image source={{ uri: item.uri }} style={styles.itemImage} />
-              </View>
-              <View style={styles.itemInfo}>
-                <Text style={styles.itemName}>{item.name}</Text>
-                <Text style={styles.itemVariant}>{item.variant}</Text>
-                <Text style={[styles.itemStock, { color: item.stockColor }]}>{item.stockText}</Text>
-              </View>
-              <View style={styles.itemActions}>
-                <View style={[styles.badge, { backgroundColor: item.badgeColor }]}>
-                  <Text style={styles.badgeText}>{item.badge}</Text>
+          {LOW_STOCK.map((item, i) => {
+            const urgent = item.level === 'out-soon'
+            return (
+              <View key={item.id} style={[styles.row, i > 0 && styles.rowDivider]}>
+                <View style={[styles.levelBar, { backgroundColor: urgent ? colors.errorDefault : colors.warningDefault }]} />
+                <View style={styles.rowIcon}>
+                  <MaterialIcons name={item.icon} size={20} color={colors.primary} />
                 </View>
-                <TouchableOpacity style={styles.orderBtn} activeOpacity={0.7}>
-                  <MaterialIcons name="add_shopping_cart" size={14} color={colors.primary} />
-                  <Text style={styles.orderBtnText}>Order</Text>
-                </TouchableOpacity>
+                <View style={styles.rowInfo}>
+                  <Text style={styles.rowName}>{item.name}</Text>
+                  <Text style={styles.rowSize}>{item.size}</Text>
+                </View>
+                <View style={styles.rowRight}>
+                  <Text style={[styles.rowLeft, { color: urgent ? colors.errorDefault : colors.warningDefault }]}>
+                    {item.left} left
+                  </Text>
+                  <Text style={styles.rowUnit}>{item.unit}</Text>
+                </View>
               </View>
-            </View>
-          ))}
-
-          {/* All-clear note */}
-          <View style={styles.clearNote}>
-            <View style={styles.clearIcon}>
-              <MaterialIcons name="verified" size={18} color={colors.onPrimary} />
-            </View>
-            <Text style={styles.clearText}>
-              All other 108 staple items are well stocked above buffer safe-levels.
-            </Text>
-          </View>
+            )
+          })}
         </View>
+
+        <TouchableOpacity style={styles.linkRow} onPress={() => router.push('/restock')} activeOpacity={0.7}>
+          <Text style={styles.linkText}>See the restock list</Text>
+          <MaterialIcons name="chevron_right" size={18} color={colors.primary} />
+        </TouchableOpacity>
+
+        <Text style={styles.footnote}>Everything else is well stocked.</Text>
       </ScrollView>
 
-      {/* FAB */}
-      <View style={[styles.fab, { bottom: insets.bottom + 80 }]}>
-        <TouchableOpacity style={styles.fabBtn} activeOpacity={0.85}>
-          <MaterialIcons name="add" size={20} color={colors.onPrimary} />
-          <Text style={styles.fabText}>Record Sale</Text>
+      {/* Main action, always in reach of the thumb */}
+      <View style={[styles.actionBar, { paddingBottom: insets.bottom + 72 }]}>
+        <TouchableOpacity style={styles.actionBtn} onPress={() => router.push('/sales')} activeOpacity={0.85}>
+          <MaterialIcons name="add" size={22} color={colors.onPrimary} />
+          <Text style={styles.actionText}>Record a sale</Text>
         </TouchableOpacity>
       </View>
     </View>
   )
 }
-

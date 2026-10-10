@@ -6,27 +6,27 @@ import {
   TabTriggerSlotProps,
   TabListProps,
 } from 'expo-router/ui';
-import { Pressable, useColorScheme, View, StyleSheet } from 'react-native';
+import { Pressable, View, StyleSheet } from 'react-native';
 
 import { ThemedText } from './themed-text';
 import { ThemedView } from './themed-view';
 
-import { Colors, MaxContentWidth, Spacing } from '@/constants/theme';
+import { MaxContentWidth, Spacing } from '@/constants/theme';
 
 export default function AppTabs() {
   return (
     <Tabs>
-      <TabSlot style={{ height: '100%' }} />
+      <TabSlot style={{ flex: 1 }} />
       <TabList asChild>
         <CustomTabList>
           <TabTrigger name="index" href="/" asChild>
-            <TabButton>Dashboard</TabButton>
+            <TabButton>Home</TabButton>
           </TabTrigger>
           <TabTrigger name="sales" href="/sales" asChild>
-            <TabButton>Sales</TabButton>
+            <TabButton>Sell</TabButton>
           </TabTrigger>
           <TabTrigger name="supply" href="/supply" asChild>
-            <TabButton>Supply</TabButton>
+            <TabButton>Prices</TabButton>
           </TabTrigger>
           <TabTrigger name="restock" href="/restock" asChild>
             <TabButton>Restock</TabButton>
@@ -52,9 +52,6 @@ export function TabButton({ children, isFocused, ...props }: TabTriggerSlotProps
 }
 
 export function CustomTabList(props: TabListProps) {
-  const scheme = useColorScheme();
-  const colors = Colors[scheme === 'unspecified' ? 'light' : scheme];
-
   return (
     <View {...props} style={styles.tabListContainer}>
       <ThemedView type="backgroundElement" style={styles.innerContainer}>
@@ -68,8 +65,8 @@ export function CustomTabList(props: TabListProps) {
 }
 
 const styles = StyleSheet.create({
+  // Bottom bar in normal flow, like the phone's tab bar, so it never covers screen content
   tabListContainer: {
-    position: 'absolute',
     width: '100%',
     padding: Spacing.three,
     justifyContent: 'center',

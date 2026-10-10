@@ -19,7 +19,8 @@ export default function RootLayout() {
 }
 
 function RootNavigator() {
-  const { signedIn, loading } = useAuth();
+  const { session, recovering, loading } = useAuth();
+  const signedIn = !!session && !recovering;
 
   // Keep the splash up until we know whether a saved session exists
   if (loading) return null;
@@ -34,6 +35,8 @@ function RootNavigator() {
           <Stack.Screen name="sign-in" />
           <Stack.Screen name="register" />
           <Stack.Screen name="verify" />
+          <Stack.Screen name="forgot-password" />
+          <Stack.Screen name="reset-password" />
         </Stack.Protected>
       </Stack>
       <AnimatedSplashOverlay />

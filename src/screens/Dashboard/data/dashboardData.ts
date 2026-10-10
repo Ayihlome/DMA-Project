@@ -1,92 +1,28 @@
-import { colors } from '../../../theme/theme'
+// Sample data until the screen reads from Supabase
 
-export const KPI_CARDS = [
-  {
-    label: 'Sales Today',
-    value: 'R1,420',
-    sub: '+14% vs yday',
-    subIcon: 'trending_up' as const,
-    subColor: colors.secondary,
-    iconName: 'payments' as const,
-    iconBg: colors.accentTint,
-    iconColor: colors.primary,
-  },
-  {
-    label: 'Low-Stock Items',
-    value: '3 items',
-    sub: 'Action required',
-    subIcon: null,
-    subColor: colors.errorDefault,
-    iconName: 'notification_important' as const,
-    iconBg: colors.errorTint,
-    iconColor: colors.errorDefault,
-  },
-  {
-    label: 'Stock Value',
-    value: 'R8,950',
-    sub: '112 line items',
-    subIcon: null,
-    subColor: colors.textSecondary,
-    iconName: 'warehouse' as const,
-    iconBg: colors.surfaceContainer,
-    iconColor: colors.primary,
-  },
-  {
-    label: 'Next Restock',
-    value: 'In 2 days',
-    sub: 'Tuesday Morning',
-    subIcon: null,
-    subColor: colors.tertiary,
-    iconName: 'local_shipping' as const,
-    iconBg: colors.warningTint,
-    iconColor: colors.tertiary,
-  },
+export const SUMMARY = {
+  salesToday: 1420,
+  salesYesterday: 1245,
+  stockValue: 8950,
+  itemCount: 112,
+  nextRestock: 'Tuesday',
+}
+
+export type StockLevel = 'out-soon' | 'low'
+
+export interface LowStockItem {
+  id: string
+  name: string
+  size: string
+  left: number
+  unit: string
+  level: StockLevel
+  icon: string
+}
+
+export const LOW_STOCK: LowStockItem[] = [
+  { id: '1', name: 'White bread', size: '700g', left: 2, unit: 'loaves', level: 'out-soon', icon: 'bakery_dining' },
+  { id: '2', name: 'Full cream milk', size: '1L sachet', left: 4, unit: 'sachets', level: 'out-soon', icon: 'water_drop' },
+  { id: '3', name: 'Sunflower oil', size: '750ml', left: 5, unit: 'bottles', level: 'low', icon: 'shopping_basket' },
+  { id: '4', name: 'Maize meal', size: '2.5kg', left: 6, unit: 'bags', level: 'low', icon: 'shopping_basket' },
 ]
-
-export const ACTION_ITEMS = [
-  {
-    id: '1',
-    name: 'White Bread',
-    variant: 'Brown/White 700g',
-    stockText: '2 loaves left',
-    badge: 'CRITICAL',
-    badgeColor: '#C53030',
-    rowBg: colors.errorTint,
-    uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBFHjYrrRUqKNjrARsfZGOAI1qkgdX2Ar13FROC5FB-KdaGxFOJq264rf-SZd00QR_9CWpvuZn9kAZqkYBxQesgJh1KBJ9Ss2mm9qoV6D5kcOCrIp9kl9Q9jYx3rW9n681V1uKtytLDNEZQ6V_A5Mys6LKJgNwWNRslzZjFGYfw72WnO0FlSP4DPE15uvevsnLDL4mGPjjWmTyFldFCMkYTmNnYzyDZRwVC7kqFajJHCYqWBy3duTqg',
-    stockColor: colors.errorDefault,
-  },
-  {
-    id: '2',
-    name: 'Full Cream Milk 1L',
-    variant: 'Fresh Milk Sachets',
-    stockText: '4 sachets left',
-    badge: 'CRITICAL',
-    badgeColor: '#C53030',
-    rowBg: colors.errorTint,
-    uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuDVGgWBhR-2eD2fsFZxgS7dYqHAAZTwhLvtyJo9nzEWlrakfsq3fG4FFebBCUXLzqewlkq2BR27N5GtgdYgzpC1DYKZW8cW1S0T3w52hF6tbfpQt081-auegh3vq54JZhweuKC58QcDXAE8gyymkYHQxOn9pb3IHDb3uham7Gbz48QhMp5vj0VATjkoVHbGjm3SxBnUQKDt8lQs_w_yHZlHnyfokrsg0Y1gJCCGlMK8rNZZYXpOFHPX',
-    stockColor: colors.errorDefault,
-  },
-  {
-    id: '3',
-    name: 'Sunflower Cooking Oil',
-    variant: '750ml Clear PET',
-    stockText: '5 bottles left',
-    badge: 'LOW',
-    badgeColor: '#DD6B20',
-    rowBg: colors.warningTint,
-    uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuBu8IVfYgHJO2j73tm8Fqi1FqzRu-hj7S-30qp8Fji1ZwWy2LseqQ-1TWHgE-UYA-0IQUF87orQpGGVHbOIFYv4TgMvyIpRbbRH_XJWuExtHqFipyNFlt1av9KxcPPPHd4c5xTiVBgSfXpC4JOSeSqIE6GLeXJiEfsk3ugFubX9c7KH_drL90i9Rvr7S_0DLffx-fnRL3U9CqapM25kzPwuhwKyzsGMB7qrG6gHN5i38pOCHsZu1k7C',
-    stockColor: colors.tertiary,
-  },
-  {
-    id: '4',
-    name: 'Maize Meal 2.5kg',
-    variant: 'Iwisa Super Maize',
-    stockText: '6 bags left',
-    badge: 'LOW',
-    badgeColor: '#DD6B20',
-    rowBg: colors.warningTint,
-    uri: 'https://lh3.googleusercontent.com/aida-public/AB6AXuCRKdoP7hNUdHU9zIsuaX0-WThN93ze3Hiwx5yz5PmfqSm81iqoSv8dh7dVl1y-37JOkJNXtbHv8Ua1D6iG-4yltoynG7uUcQZTo65gmHYe9PmgM1bZlNEIht8aGD2DpDuaDTaZrrgDGu414yxHpIn-fx2iwXVhdkjhx0wlONgdGiuVo3XkV4Mp08rdx8yLHNsZS3p2dgS3_tgwXrwRbMxdbLYn51j-7IM8n4nImyC2xJFF5aEZ-tiO',
-    stockColor: colors.tertiary,
-  },
-]
-
