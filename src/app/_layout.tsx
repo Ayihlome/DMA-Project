@@ -1,8 +1,9 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
+import { useState } from 'react';
 import { ActivityIndicator, useColorScheme, View } from 'react-native';
 
-import { AnimatedSplashOverlay } from '@/components/animated-icon';
+import AnimatedSplash from '@/components/AnimatedSplash';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { StoreProvider } from '@/store';
 import { colors } from '@/theme/theme';
@@ -31,9 +32,33 @@ export default function RootLayout() {
   return (
     <ThemeProvider value={colorScheme === 'dark' ? DarkTheme : DefaultTheme}>
       <AuthProvider>
-        <StoreGate />
+        <Root />
       </AuthProvider>
     </ThemeProvider>
+  );
+}
+
+/**
+ * Sits above the navigator so the splash also covers the gap where RootNavigator
+ * renders nothing while the saved session is being read. It is inside
+ * AuthProvider because "ready" means that read has finished.
+ */
+function Root() {
+  const { loading } = useAuth();
+  const [splashDone, setSplashDone] = useState(false);
+
+  return (
+    <>
+      <StoreGate />
+      {!splashDone && (
+        <AnimatedSplash
+          isReady={!loading}
+          onFinish={() => setSplashDone(true)}
+          background={colors.bgBase}
+          ink={colors.primary}
+        />
+      )}
+    </>
   );
 }
 
@@ -76,7 +101,6 @@ function RootNavigator() {
             sign-up and from Profile afterwards */}
         <Stack.Screen name="privacy" options={{ ...pageHeader, title: 'Privacy' }} />
       </Stack>
-      <AnimatedSplashOverlay />
     </>
   );
 }
