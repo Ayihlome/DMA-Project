@@ -4,14 +4,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
 import { colors } from '../../theme/theme'
-import { ITEMS, REGULAR_STOCK } from './data/restockData'
 import { styles } from './styles'
+import { useRestockData } from './useRestockData'
+import { useStore } from '../../store'
 
 const rand = (n: number) => `R${n.toFixed(2)}`
 
 export default function RestockScreen() {
   const insets = useSafeAreaInsets()
-  const [budget, setBudget] = useState('2500')
+  const store = useStore()
+  const { ITEMS, REGULAR_STOCK, saveList } = useRestockData()
+  const [budget, setBudget] = useState(() => String(store.state.budget || 2500))
   const [checked, setChecked] = useState<Set<number>>(new Set(ITEMS.map(i => i.id)))
   // index into each item's supplier list; 0 = cheapest
   const [supplierFor, setSupplierFor] = useState<Record<number, number>>({})
@@ -67,7 +70,7 @@ export default function RestockScreen() {
               <TextInput
                 style={styles.budgetInput}
                 value={budget}
-                onChangeText={t => { setBudget(t.replace(/[^0-9.]/g, '')); setSaved(false) }}
+                onChangeText={t => { const v = t.replace(/[^0-9.]/g, ''); setBudget(v); setSaved(false); const n = parseFloat(v); if (!isNaN(n)) store.setBudget(n) }}
                 keyboardType="decimal-pad"
                 accessibilityLabel="Restock budget in rand"
               />
@@ -168,7 +171,7 @@ export default function RestockScreen() {
           <Text style={styles.footerTotal}>{rand(total)}</Text>
         </View>
         <TouchableOpacity
-          onPress={() => setSaved(true)}
+          onPress={() => { saveList(checked, supplierFor); setSaved(true) }}
           disabled={!withinBudget}
           style={[styles.saveBtn, !withinBudget && styles.saveBtnOff, saved && styles.saveBtnDone]}
           activeOpacity={0.85}
