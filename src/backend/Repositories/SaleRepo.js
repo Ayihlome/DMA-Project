@@ -9,9 +9,20 @@ class SaleRepository {
     lineItems,
     deductions,
   }) {
+    const deductionTotals = new Map();
+    for (const deduction of deductions) {
+      deductionTotals.set(
+        deduction.productID,
+        (deductionTotals.get(deduction.productID) ?? 0) + deduction.quantity,
+      );
+    }
+    const totalDeductions = [...deductionTotals].map(
+      ([productID, quantity]) => ({ productID, quantity }),
+    );
+
     await db.transaction(async (tx) => {
-      // 1. validate stock for each deduction
-      for (const { productID, quantity } of deductions) {
+      // 1. validate the combined requirement for each product
+      for (const { productID, quantity } of totalDeductions) {
         const { rows } = await tx.execute(
           `select quantity_on_hand from stock_items where product_id = ?`,
           [productID],
@@ -65,7 +76,7 @@ class SaleRepository {
 
       // 4. apply stock deductions, log movements, queue deltas (see StockRepository
       //    for why these are deltas, not snapshots)
-      for (const { productID, quantity } of deductions) {
+      for (const { productID, quantity } of totalDeductions) {
         await tx.execute(
           `update stock_items set quantity_on_hand = quantity_on_hand - ?, updated_at = ? where product_id = ?`,
           [quantity, now, productID],
@@ -106,4 +117,4 @@ class SaleRepository {
   }
 }
 
-export default SaleRepo;
+export default SaleRepository;

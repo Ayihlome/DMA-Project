@@ -21,7 +21,21 @@ export function createRecordSaleUseCase({
     const allDeductions = [];
     let total = 0;
 
+    if (!input.items?.length) {
+      return {
+        success: false,
+        errors: [`No items selected for sale`],
+      };
+    }
+
     for (const item of input.items) {
+      if (item.quantitySold <= 0) {
+        return {
+          success: false,
+          errors: [`Quantity for item ${item.productID} not selected`],
+        };
+      }
+
       const product = await productRepository.getByID(item.productID);
       if (!product) {
         return {
@@ -48,6 +62,37 @@ export function createRecordSaleUseCase({
           return { success: false, errors: preview.errors };
         }
         allDeductions.push(...preview.deductions);
+      } else {
+        allDeductions.push({
+          productID: item.productID,
+          quantity: item.quantitySold,
+        });
+      }
+    }
+
+    const deductionTotals = new Map();
+    for (const deduction of allDeductions) {
+      deductionTotals.set(
+        deduction.productID,
+        (deductionTotals.get(deduction.productID) ?? 0) + deduction.quantity,
+      );
+    }
+    const deductions = [...deductionTotals].map(([productID, quantity]) => ({
+      productID,
+      quantity,
+    }));
+
+    for (const deduction of deductions) {
+      if (
+        !(await recipeEngine.checkStock(
+          deduction.productID,
+          deduction.quantity,
+        ))
+      ) {
+        return {
+          success: false,
+          errors: [`Insufficient stock for ${deduction.productID}`],
+        };
       }
     }
 
@@ -60,7 +105,7 @@ export function createRecordSaleUseCase({
         timestamp: new Date().toISOString(),
         totalAmount: total,
         lineItems,
-        deductions: allDeductions,
+        deductions,
       });
     } catch (err) {
       // could be a productID or insufficient stock

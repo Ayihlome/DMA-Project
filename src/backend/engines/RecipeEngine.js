@@ -31,15 +31,20 @@ class RecipeEngine {
     }
 
     //2. Calculate required deductions
-    const deductions = components.map((component) => {
+    const deductionTotals = new Map();
+    for (const component of components) {
       const quantityToDeduct =
         saleLineItem.quantitySold * component.quantityRequired;
-
-      return {
-        productID: component.componentProductID,
-        quantity: quantityToDeduct,
-      };
-    });
+      deductionTotals.set(
+        component.componentProductID,
+        (deductionTotals.get(component.componentProductID) ?? 0) +
+          quantityToDeduct,
+      );
+    }
+    const deductions = [...deductionTotals].map(([productID, quantity]) => ({
+      productID,
+      quantity,
+    }));
 
     //3. Validate before stock changes
     for (const deduction of deductions) {

@@ -1,16 +1,30 @@
 class Product {
-  constructor(productID, name, units, sellingPrice, category, type) {
-    this.productID = productID;
-    this.productName = name;
-    this.sellingPrice = sellingPrice;
-    this.category = category;
-    this.units = units;
-    this.type = type; // is it a single product item or composite
-    this.database;
+  constructor({
+    id,
+    name,
+    sku,
+    unit,
+    sellingPrice,
+    category,
+    isComposite,
+    packSize,
+    openingStock,
+  }) {
+    Object.assign(this, {
+      id,
+      name,
+      sku,
+      unit,
+      sellingPrice,
+      category,
+      is_composite: isComposite,
+      packSize,
+      openingStock,
+    });
   }
 
   isComposite() {
-    return this.type;
+    return this.is_composite;
   }
 }
 

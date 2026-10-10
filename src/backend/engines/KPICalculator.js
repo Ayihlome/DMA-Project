@@ -26,11 +26,11 @@ class KPICalculator {
 
   async calcSalesVelocity(productID) {
     // total units sold in the rolling window / window length = units per day
-    const totalSold = await this.salesRepository.getTotalQuantitySold(
+    const totalDeducted = await this.stockRepository.getTotalDeducted(
       productID,
       this.windowDays,
     );
-    return totalSold / this.windowDays;
+    return totalDeducted / this.windowDays;
   }
 
   async calcDaysRemaining(productID) {
@@ -56,7 +56,7 @@ class KPICalculator {
   }
 
   async calcTurnoverRate(productID) {
-    const totalSold = await this.salesRepository.getTotalQuantitySold(
+    const totalDeducted = await this.stockRepository.getTotalDeducted(
       productID,
       this.windowDays,
     );
@@ -66,7 +66,7 @@ class KPICalculator {
     );
 
     if (!avgStockHeld) return null;
-    return totalSold / avgStockHeld;
+    return totalDeducted / avgStockHeld;
   }
 
   async generateSnapshot(productID) {

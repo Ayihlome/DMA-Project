@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { createClient } from '@supabase/supabase-js';
+import { supabase } from "../../../lib/supabase.js";
 
 export async function enqueueSync(entityType, entityID, operation, payload) {
   await db.execute(
@@ -26,22 +26,8 @@ export async function processSyncQueue() {
   for (const item of pendingItems) {
     try {
       const payload = JSON.parse(item.payload_json);
-      
-      if (item.entity_type === "stock_movements") {
-        const { error } = await supabase.from ("stock_movements").insert (
-          {
-            id: item.entity_id,
-            product_id: payload.productid,
-            delta: payload.delta,
-            resulting_quantity: payload.resulting_quantity,
-            reason: payload.reason,
-            created_at: payload.created_at
-          }
-         );
-        if (error) {
-          throw error; 
-          }
-      } else if (item.operation === "insert") {
+
+      if (item.operation === "insert") {
         const { error } = await supabase.from(item.entity_type).insert(payload);
 
         if (error) {

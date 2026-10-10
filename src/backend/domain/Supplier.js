@@ -1,8 +1,6 @@
 class Suppliers {
-  constructor(name, contact, location) {
-    this.supplierName = name;
-    this.contact = contact;
-    this.location = location;
+  constructor({ id, name, contact, location }) {
+    Object.assign(this, { id, name, contact, location });
   }
 }
 
