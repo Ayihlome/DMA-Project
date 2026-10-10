@@ -1,10 +1,5 @@
 import { db } from "./db.js";
-import { createClient } from "@supabase/supabase-js";
-
-const supabase = createClient(
-  process.env.SUPABASE_URL,
-  process.env.SUPABASE_KEY,
-);
+import { supabase } from "../../../lib/supabase.js";
 
 export async function enqueueSync(entityType, entityID, operation, payload) {
   await db.execute(

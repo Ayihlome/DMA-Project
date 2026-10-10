@@ -23,8 +23,8 @@ class RestockEngine {
   calcUrgency(kpiSnapshot) {
     const daysRemaining = kpiSnapshot.daysOfStockRemaining;
 
-    if (daysRemaining <= 3) {
-      return "Critical";
+    if (daysRemaining == null) {
+      return "OK";
     } else if (daysRemaining <= 7) {
       return "Low Stock";
     } else {
@@ -146,3 +146,4 @@ class RestockEngine {
     );
   }
 }
+export default RestockEngine;

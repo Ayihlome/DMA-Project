@@ -15,7 +15,9 @@ class SupplierRepository {
   }
 
   async getAll() {
-    const { rows } = await db.execute(`select * from suppliers`);
+    const { rows } = await db.execute(
+      `select * from suppliers where is_deleted = 0`,
+    );
     return rows;
   }
 }

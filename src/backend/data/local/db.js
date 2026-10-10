@@ -6,8 +6,8 @@ export const db = open({
   encryptionKey: process.env.SQLCIPHER_KEY,
 });
 
-export function runMigration() {
-  db.execute(`
+export async function runMigration() {
+  await db.execute(`
         create table if not exists products (
       id text primary key,
       name text not null,
@@ -16,13 +16,14 @@ export function runMigration() {
       is_composite integer not null default 0,
       selling_price real,
       category text, 
+      pack_size real not null default 1,
       created_at text not null,
       updated_at text not null,
       is_deleted integer not null default 0
     );
     `);
 
-  db.execute(`
+  await db.execute(`
     create table if not exists recipe_components (
       id text primary key,
       parent_product_id text not null references products(id),
@@ -33,7 +34,7 @@ export function runMigration() {
     );
   `);
 
-  db.execute(`
+  await db.execute(`
     create table if not exists stock_items (
       product_id text primary key references products(id),
       quantity_on_hand real not null,
@@ -43,7 +44,7 @@ export function runMigration() {
     );
   `);
 
-  db.execute(`
+  await db.execute(`
     create table if not exists stock_movements (
       id text primary key,
       product_id text not null references products(id),
@@ -54,12 +55,12 @@ export function runMigration() {
     );
   `);
 
-  db.execute(`
+  await db.execute(`
     create index if not exists idx_stock_movements_product_time
     on stock_movements (product_id, created_at);
   `);
 
-  db.execute(`
+  await db.execute(`
     create table if not exists sales (
       id text primary key,
       owner_id text not null,
@@ -70,7 +71,7 @@ export function runMigration() {
     );
   `);
 
-  db.execute(`
+  await db.execute(`
     create table if not exists sale_line_items (
       id text primary key,
       sale_id text not null references sales(id),
@@ -82,7 +83,7 @@ export function runMigration() {
     );
   `);
 
-  db.execute(`
+  await db.execute(`
     create table if not exists kpi_snapshots (
       id text primary key,
       product_id text not null unique references products(id),
@@ -96,7 +97,7 @@ export function runMigration() {
 
   // generic queue — one row per pending change, replayed to Supabase by the sync service on reconnect.
   // so adding a new synced table later doesn't require a schema change here.
-  db.execute(`
+  await db.execute(`
     create table if not exists sync_queue (
       id text primary key,
       entity_type text not null,
@@ -109,23 +110,131 @@ export function runMigration() {
     );
   `);
 
-  db.execute(
+  await db.execute(
     `create table if not exists suppliers (
     id text primary key, 
     name text,
-    contact integer not null,
-    location text not null,
+    contact text,
+    location text,
     updated_at text not null,
-    is_deleted text not null
+    is_deleted integer not null default 0
     );`,
   );
 
-  db.execute(
+  await db.execute(
     `create table if not exists supplier_prices (
-    supplier_id text primary key,
-    product_id text not null,
-    unit_price integer not null,
-    minimum_order integer not null
+    id text primary key,
+    supplier_id text not null references suppliers(id),
+    product_id text not null references products(id),
+    unit_price real not null,
+    minimum_order real,
+    updated_at text not null,
+    unique(supplier_id, product_id)
     );`,
   );
+
+  const productColumns = await db.execute(`pragma table_info(products)`);
+  if (!productColumns.rows.some((column) => column.name === "pack_size")) {
+    await db.execute(
+      `alter table products add column pack_size real not null default 1`,
+    );
+  }
+
+  await migrateSupplierTables();
+}
+
+async function migrateSupplierTables() {
+  const { rows: supplierColumns } = await db.execute(
+    `pragma table_info(suppliers)`,
+  );
+  const { rows: priceColumns } = await db.execute(
+    `pragma table_info(supplier_prices)`,
+  );
+  const supplierColumn = (name) =>
+    supplierColumns.find((column) => column.name === name);
+  const priceColumn = (name) =>
+    priceColumns.find((column) => column.name === name);
+  const suppliersNeedMigration =
+    supplierColumn("contact")?.type?.toUpperCase() !== "TEXT" ||
+    supplierColumn("location")?.notnull === 1 ||
+    supplierColumn("is_deleted")?.type?.toUpperCase() !== "INTEGER";
+  const pricesNeedMigration =
+    !priceColumn("id") ||
+    priceColumn("unit_price")?.type?.toUpperCase() !== "REAL" ||
+    !priceColumn("updated_at");
+
+  if (!suppliersNeedMigration && !pricesNeedMigration) return;
+
+  await db.transaction(async (tx) => {
+    await tx.execute(
+      `alter table supplier_prices rename to supplier_prices_legacy`,
+    );
+    await tx.execute(`alter table suppliers rename to suppliers_legacy`);
+    await tx.execute(`
+      create table suppliers (
+        id text primary key,
+        name text,
+        contact text,
+        location text,
+        updated_at text not null,
+        is_deleted integer not null default 0
+      )
+    `);
+    await tx.execute(`
+      create table supplier_prices (
+        id text primary key,
+        supplier_id text not null references suppliers(id),
+        product_id text not null references products(id),
+        unit_price real not null,
+        minimum_order real,
+        updated_at text not null,
+        unique(supplier_id, product_id)
+      )
+    `);
+
+    const now = new Date().toISOString();
+    const { rows: oldSuppliers } = await tx.execute(
+      `select * from suppliers_legacy`,
+    );
+    for (const supplier of oldSuppliers) {
+      await tx.execute(
+        `insert into suppliers (id, name, contact, location, updated_at, is_deleted)
+         values (?, ?, ?, ?, ?, ?)`,
+        [
+          supplier.id,
+          supplier.name ?? null,
+          supplier.contact == null ? null : String(supplier.contact),
+          supplier.location ?? null,
+          supplier.updated_at ?? now,
+          [1, "1", "true"].includes(supplier.is_deleted) ? 1 : 0,
+        ],
+      );
+    }
+
+    const { rows: oldPrices } = await tx.execute(
+      `select * from supplier_prices_legacy`,
+    );
+    for (const price of oldPrices) {
+      await tx.execute(
+        `insert into supplier_prices
+         (id, supplier_id, product_id, unit_price, minimum_order, updated_at)
+         values (?, ?, ?, ?, ?, ?)
+         on conflict(supplier_id, product_id) do update set
+           unit_price = excluded.unit_price,
+           minimum_order = excluded.minimum_order,
+           updated_at = excluded.updated_at`,
+        [
+          price.id ?? crypto.randomUUID(),
+          price.supplier_id,
+          price.product_id,
+          Number(price.unit_price),
+          price.minimum_order ?? price.min_order ?? null,
+          price.updated_at ?? now,
+        ],
+      );
+    }
+
+    await tx.execute(`drop table supplier_prices_legacy`);
+    await tx.execute(`drop table suppliers_legacy`);
+  });
 }

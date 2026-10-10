@@ -1,8 +1,11 @@
 class RecipeComponent {
-  constructor(productID, componentProductID, quantity) {
-    this.productID = productID; // the main product e,g Kota 3
-    this.componentProductID = componentProductID; // ingredient
-    this.quantityRequired = quantity;
+  constructor({ id, parentProductID, componentProductID, quantityRequired }) {
+    Object.assign(this, {
+      id,
+      parentProductID,
+      componentProductID,
+      quantityRequired,
+    });
   }
 }
 

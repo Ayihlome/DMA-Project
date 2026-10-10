@@ -14,8 +14,10 @@ const pageHeader = {
   headerTitleStyle: { color: colors.textPrimary },
   headerShadowVisible: false,
 };
+import { runMigration } from '../backend/data/local/db';
 
 SplashScreen.preventAutoHideAsync();
+runMigration()
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
