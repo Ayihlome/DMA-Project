@@ -47,6 +47,16 @@ const IOS_SYMBOLS: Record<string, string> = {
   warehouse: 'shippingbox.fill',
   notification_important: 'bell.badge.fill',
   save_as: 'square.and.arrow.down.fill',
+  expand_more: 'chevron.down',
+  expand_less: 'chevron.up',
+  chevron_right: 'chevron.right',
+  logout: 'rectangle.portrait.and.arrow.right',
+  lunch_dining: 'takeoutbag.and.cup.and.straw.fill',
+  local_drink: 'cup.and.saucer.fill',
+  water_drop: 'drop.fill',
+  egg: 'oval.fill',
+  shopping_basket: 'basket.fill',
+  receipt_long: 'list.bullet.rectangle.fill',
 }
 
 export default function MaterialIcon({ name, size = 24, color = '#000' }: Props) {

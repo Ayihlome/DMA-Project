@@ -12,7 +12,6 @@
     },
     "android": {
       "package": "com.stockevo.app"
-      
     },
     "plugins": [
       "expo-font",
@@ -22,8 +21,13 @@
           "photosPermission": "StockEvo uses your photos so you can set your own product pictures."
         }
       ],
+      "expo-sqlite",
       "expo-sharing",
       "expo-status-bar"
-    ]
+    ],
+    "experiments": {
+      "typedRoutes": true,
+      "reactCompiler": true
+    }
   }
 }

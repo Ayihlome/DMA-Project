@@ -39,7 +39,7 @@ export function AuthLayout({ title, subtitle, children, switchText, switchLabel,
             <View style={styles.logo}>
               <MaterialIcons name="inventory_2" size={28} color={colors.onPrimary} />
             </View>
-            <Text style={styles.shopName}>Bongani Spaza</Text>
+            <Text style={styles.shopName}>StockMate</Text>
             <Text style={styles.subtitle}>{subtitle}</Text>
           </View>
 

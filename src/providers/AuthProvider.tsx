@@ -1,56 +1,56 @@
-import type { Session } from '@supabase/supabase-js';
+import type { AuthError, Session } from '@supabase/supabase-js';
 import { createContext, useContext, useEffect, useState, type ReactNode } from 'react';
 
 import { supabase } from '@/lib/supabase';
 
-// false = the sign-in/register forms just let you into the app (no Supabase account check).
-// Set to true to use real Supabase accounts again (needs "Confirm email" off, or SMTP set up for codes).
-export const REAL_AUTH = false;
-
-type AuthState = {
-  signedIn: boolean;
+export type AuthState = {
   session: Session | null;
+  signedIn: boolean;
+  // True after a password-reset code is verified: Supabase has signed the user in,
+  // but they stay on the reset screen until the new password is saved
+  recovering: boolean;
   loading: boolean;
-  enterApp: () => void;
-  signOut: () => Promise<void>;
+  finishRecovery: () => void;
+  signOut: () => Promise<{ error: AuthError | null }>;
 };
 
 const AuthContext = createContext<AuthState>({
-  signedIn: false,
   session: null,
+  signedIn: false,
+  recovering: false,
   loading: true,
-  enterApp: () => {},
-  signOut: async () => {},
+  finishRecovery: () => {},
+  signOut: async () => ({ error: null }),
 });
 
 export function AuthProvider({ children }: { children: ReactNode }) {
   const [session, setSession] = useState<Session | null>(null);
-  const [loading, setLoading] = useState(REAL_AUTH);
-  const [demoSignedIn, setDemoSignedIn] = useState(false);
+  const [recovering, setRecovering] = useState(false);
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
-    if (!REAL_AUTH) return;
-
+    // Restore the session saved on this device, if any
     supabase.auth.getSession().then(({ data }) => {
       setSession(data.session);
       setLoading(false);
     });
 
-    const { data } = supabase.auth.onAuthStateChange((_event, newSession) => {
+    // Sign in, sign out, email verified and token refreshes all land here
+    const { data } = supabase.auth.onAuthStateChange((event, newSession) => {
       setSession(newSession);
+      if (event === 'PASSWORD_RECOVERY') setRecovering(true);
+      else if (event === 'SIGNED_IN' || event === 'SIGNED_OUT') setRecovering(false);
     });
     return () => data.subscription.unsubscribe();
   }, []);
 
   const value: AuthState = {
-    signedIn: REAL_AUTH ? !!session : demoSignedIn,
     session,
+    signedIn: !!session && !recovering,
+    recovering,
     loading,
-    enterApp: () => setDemoSignedIn(true),
-    signOut: async () => {
-      if (REAL_AUTH) await supabase.auth.signOut();
-      else setDemoSignedIn(false);
-    },
+    finishRecovery: () => setRecovering(false),
+    signOut: () => supabase.auth.signOut(),
   };
 
   return <AuthContext.Provider value={value}>{children}</AuthContext.Provider>;

@@ -1,11 +1,11 @@
 /**
- * Business logic shared with the website. These files live in ../src and are bundled by
- * Metro through `watchFolders` (see metro.config.js), so both apps always run the same rules.
+ * Business logic re-exported so screens can import from one place.
+ * Types, inventory engine, analytics and store actions all live in src/data/.
  */
-export * from '../../src/data/types'
-export * from '../../src/data/inventory'
-export * from '../../src/data/analytics'
-export { createSeedState } from '../../src/data/seed'
-export * from '../../src/lib/format'
-export * as actions from '../../src/data/actions'
-export type { Result, StoreApi } from '../../src/data/actions'
+export * from './data/types'
+export * from './data/inventory'
+export * from './data/analytics'
+export { createSeedState } from './data/seed'
+export * from './lib/format'
+export * as actions from './data/actions'
+export type { Result, StoreApi } from './data/actions'
