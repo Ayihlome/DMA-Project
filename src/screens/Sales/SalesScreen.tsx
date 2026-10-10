@@ -1,5 +1,4 @@
 import React, { useState } from 'react'
-import { useCase } from "../../backend/useCases/container"
 import {
   View,
   Text,
@@ -16,8 +15,10 @@ import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
 import { colors, spacing, radius, type, shadow, card } from '../../theme/theme'
 
-import { CATEGORIES, PRODUCTS, type Category, type Product } from './data/salesData'
+import { CATEGORIES, type Category, type Product } from './data/salesData'
 import { styles } from './styles'
+import { useSalesData } from './useSalesData'
+import { useStore } from '../../store'
 
 interface CartItem {
   id: string
@@ -27,10 +28,10 @@ interface CartItem {
   hasRecipe?: boolean
 }
 
-let cart = []
-
 export default function SalesScreen() {
   const insets = useSafeAreaInsets()
+  const store = useStore()
+  const { PRODUCTS } = useSalesData()
   const [category, setCategory] = useState<Category>('all')
   const [cart, setCart] = useState<CartItem[]>([
     { id: 'bread', name: 'White Bread 700g', unit: 17, qty: 1 },
@@ -39,6 +40,7 @@ export default function SalesScreen() {
   const [drawerOpen, setDrawerOpen] = useState(true)
   const [ingredientsOpen, setIngredientsOpen] = useState(true)
   const [toastVisible, setToastVisible] = useState(false)
+  const [confirmedTotal, setConfirmedTotal] = useState(0)
 
   const total = cart.reduce((s, i) => s + i.unit * i.qty, 0)
 
@@ -57,10 +59,15 @@ export default function SalesScreen() {
   }
 
   function confirmSale() {
-    setToastVisible(true)
-    //example of how to use use cases: starting with the import
-    // const result = await useCases.recordSale({ownerID, items: cartItems})
-    setTimeout(() => setToastVisible(false), 2800)
+    const confirmedTotal = total
+    const lines = cart.map((i) => ({ productId: i.id, qty: i.qty }))
+    const result = store.recordSale(lines)
+    if (result.ok) {
+      setCart([])
+      setConfirmedTotal(confirmedTotal)
+      setToastVisible(true)
+      setTimeout(() => setToastVisible(false), 2800)
+    }
   }
 
   return (
@@ -71,7 +78,7 @@ export default function SalesScreen() {
       {toastVisible && (
         <View style={[styles.toast, { top: 72 + insets.top }]}>
           <MaterialIcons name="check_circle" size={20} color="#83d8a6" />
-          <Text style={styles.toastText}>Sale of R{total.toFixed(2)} recorded & stock deducted!</Text>
+          <Text style={styles.toastText}>Sale of R{confirmedTotal.toFixed(2)} recorded & stock deducted!</Text>
         </View>
       )}
 
