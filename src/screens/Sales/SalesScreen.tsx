@@ -1,5 +1,4 @@
-import React, { useState } from 'react'
-import { useCase } from "../../backend/useCases/container"
+import React, { useEffect, useState } from 'react'
 import {
   View,
   Text,
@@ -8,15 +7,18 @@ import {
   TextInput,
   Image,
   FlatList,
-  Modal,
-  Animated,
 } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
-import { colors, spacing, radius, type, shadow, card } from '../../theme/theme'
+import { Loading, LoadError, Note } from '../../components/common/ScreenState'
+import { colors, spacing } from '../../theme/theme'
+import { useCases } from '../../backend/useCases/container'
+import { useUseCase, useOwnerId } from '../../hooks/use-use-case'
 
-import { CATEGORIES, PRODUCTS, type Category, type Product } from './data/salesData'
+import { CATEGORIES, type Category, type Product } from './data/salesData'
+import { maxSellable, storedCategory, toCard, type SellableProduct } from './data/productCards'
+import { round2 } from '../shared/productPresentation'
 import { styles } from './styles'
 
 interface CartItem {
@@ -24,54 +26,120 @@ interface CartItem {
   name: string
   unit: number
   qty: number
+  /** Most that can be sold right now (stock, or the scarcest ingredient). */
+  max: number
   hasRecipe?: boolean
 }
 
-let cart = []
+const UUID = /[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}/gi
 
 export default function SalesScreen() {
   const insets = useSafeAreaInsets()
+  const ownerID = useOwnerId()
   const [category, setCategory] = useState<Category>('all')
-  const [cart, setCart] = useState<CartItem[]>([
-    { id: 'bread', name: 'White Bread 700g', unit: 17, qty: 1 },
-    { id: 'kota', name: 'Kota Special', unit: 35, qty: 1, hasRecipe: true },
-  ])
-  const [drawerOpen, setDrawerOpen] = useState(true)
+  const [search, setSearch] = useState('')
+  const [cart, setCart] = useState<CartItem[]>([])
+  const [drawerOpen, setDrawerOpen] = useState(false)
   const [ingredientsOpen, setIngredientsOpen] = useState(true)
-  const [toastVisible, setToastVisible] = useState(false)
+  const [toast, setToast] = useState<string | null>(null)
+  const [saleError, setSaleError] = useState<string | null>(null)
+  const [saving, setSaving] = useState(false)
+  const [deductions, setDeductions] = useState<{ text: string | null; error: string | null }>({ text: null, error: null })
+
+  const catalogue = useUseCase<SellableProduct[]>(
+    () => useCases.getSellableProducts({ search, category: storedCategory(category), sellableOnly: true }),
+    [search, category],
+  )
+  const available = catalogue.data ?? []
+  const cards = available.map(p => ({ card: toCard(p), max: maxSellable(p) }))
+
+  // Messages from the use cases name products by id; show the name the owner knows.
+  const readable = (message: string) =>
+    message.replace(UUID, id => cart.find(i => i.id === id)?.name ?? available.find(p => p.id === id)?.name ?? 'an ingredient')
 
   const total = cart.reduce((s, i) => s + i.unit * i.qty, 0)
 
-  function addToCart(p: Product) {
+  // What the made-to-order items in the cart will take out of stock.
+  useEffect(() => {
+    if (!cart.some(i => i.hasRecipe)) {
+      setDeductions({ text: null, error: null })
+      return
+    }
+    let current = true
+    useCases
+      .previewSaleDeductions({ items: cart.map(i => ({ productID: i.id, quantitySold: i.qty })) })
+      .then(result => {
+        if (!current) return
+        if (!result.success) return setDeductions({ text: null, error: readable(result.errors.join(' ')) })
+        const parts = result.deductionLines.map(
+          (d: { name: string; unit: string; quantity: number }) => `${round2(d.quantity)} ${d.unit} ${d.name}`,
+        )
+        setDeductions({ text: parts.length ? `${parts.join(', ')} will be deducted.` : null, error: null })
+      })
+      .catch(() => { if (current) setDeductions({ text: null, error: null }) })
+    return () => { current = false }
+  }, [cart])
+
+  function addToCart(p: Product, max: number) {
     if (p.disabled) return
+    setSaleError(null)
     setCart(prev => {
       const ex = prev.find(i => i.id === p.id)
-      if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: i.qty + 1 } : i)
-      return [...prev, { id: p.id, name: p.name, unit: p.price, qty: 1, hasRecipe: p.hasRecipe }]
+      if (ex) return prev.map(i => i.id === p.id ? { ...i, qty: Math.min(i.max, i.qty + 1) } : i)
+      return [...prev, { id: p.id, name: p.name, unit: p.price, qty: 1, max, hasRecipe: p.hasRecipe }]
     })
     setDrawerOpen(true)
   }
 
   function changeQty(id: string, delta: number) {
-    setCart(prev => prev.map(i => i.id === id ? { ...i, qty: i.qty + delta } : i).filter(i => i.qty > 0))
+    setSaleError(null)
+    setCart(prev => prev
+      .map(i => i.id === id ? { ...i, qty: Math.min(i.max, i.qty + delta) } : i)
+      .filter(i => i.qty > 0))
   }
 
-  function confirmSale() {
-    setToastVisible(true)
-    //example of how to use use cases: starting with the import
-    // const result = await useCases.recordSale({ownerID, items: cartItems})
-    setTimeout(() => setToastVisible(false), 2800)
+  async function confirmSale() {
+    if (saving || cart.length === 0) return
+    setSaving(true)
+    setSaleError(null)
+    try {
+      const result = await useCases.recordSale({
+        ownerID,
+        items: cart.map(i => ({ productID: i.id, quantitySold: i.qty })),
+      })
+      if (!result.success) {
+        setSaleError(readable(result.errors.join(' ')))
+        return
+      }
+      setToast(`Sale of R${result.total.toFixed(2)} recorded & stock deducted!`)
+      setCart([])
+      setDrawerOpen(false)
+      setTimeout(() => setToast(null), 2800)
+    } catch (e) {
+      setSaleError(e instanceof Error ? readable(e.message) : 'Something went wrong.')
+    } finally {
+      setSaving(false)
+      catalogue.reload()
+    }
   }
 
   return (
     <View style={styles.screen}>
       <AppHeader screenLabel="Sales" />
 
+      {/* The sale could not be recorded: say why, right here */}
+      {saleError && (
+        <View style={[styles.toast, { top: 72 + insets.top, backgroundColor: colors.errorDefault }]} accessibilityRole="alert">
+          <MaterialIcons name="warning" size={20} color={colors.onError} />
+          <Text style={styles.toastText}>{saleError}</Text>
+        </View>
+      )}
+
       {/* Toast */}
-      {toastVisible && (
+      {toast && (
         <View style={[styles.toast, { top: 72 + insets.top }]}>
           <MaterialIcons name="check_circle" size={20} color="#83d8a6" />
-          <Text style={styles.toastText}>Sale of R{total.toFixed(2)} recorded & stock deducted!</Text>
+          <Text style={styles.toastText}>{toast}</Text>
         </View>
       )}
 
@@ -84,6 +152,9 @@ export default function SalesScreen() {
               style={styles.searchText}
               placeholder="Search item or scan barcode..."
               placeholderTextColor={colors.textSecondary}
+              value={search}
+              onChangeText={setSearch}
+              autoCorrect={false}
             />
           </View>
           <TouchableOpacity style={styles.scanBtn} activeOpacity={0.8}>
@@ -118,10 +189,10 @@ export default function SalesScreen() {
 
         {/* Product grid */}
         <View style={styles.grid}>
-          {PRODUCTS.map(p => (
+          {cards.map(({ card: p, max }) => (
             <TouchableOpacity
               key={p.id}
-              onPress={() => addToCart(p)}
+              onPress={() => addToCart(p, max)}
               disabled={p.disabled}
               style={[styles.productCard, p.disabled && styles.productCardDisabled]}
               activeOpacity={0.8}
@@ -157,6 +228,10 @@ export default function SalesScreen() {
             </TouchableOpacity>
           ))}
         </View>
+        {!catalogue.data && (catalogue.error ? <LoadError message={catalogue.error} onRetry={catalogue.reload} /> : <Loading />)}
+        {catalogue.data && cards.length === 0 && (
+          <Note>{search || category !== 'all' ? 'Nothing matches that search.' : 'No products for sale yet. Add some under Products.'}</Note>
+        )}
       </ScrollView>
 
       {/* Cart Drawer */}
@@ -180,6 +255,7 @@ export default function SalesScreen() {
 
         {drawerOpen && (
           <ScrollView style={styles.drawerBody} showsVerticalScrollIndicator={false}>
+            {cart.length === 0 && <Note>Tap an item to add it to the sale.</Note>}
             {cart.map(item => (
               <View key={item.id} style={styles.cartItem}>
                 <View style={{ flex: 1 }}>
@@ -198,7 +274,7 @@ export default function SalesScreen() {
                 <Text style={styles.cartItemTotal}>R{(item.unit * item.qty).toFixed(2)}</Text>
               </View>
             ))}
-            {cart.find(i => i.id === 'kota') && (
+            {cart.some(i => i.hasRecipe) && (
               <TouchableOpacity onPress={() => setIngredientsOpen(o => !o)} style={styles.recipeRow} activeOpacity={0.8}>
                 <View style={{ flexDirection: 'row', alignItems: 'center', gap: 6 }}>
                   <MaterialIcons name="inventory" size={16} color={colors.primary} />
@@ -207,8 +283,10 @@ export default function SalesScreen() {
                 <MaterialIcons name={ingredientsOpen ? 'expand_less' : 'expand_more'} size={16} color={colors.textSecondary} />
               </TouchableOpacity>
             )}
-            {ingredientsOpen && cart.find(i => i.id === 'kota') && (
-              <Text style={styles.recipeText}>Quarter loaf, 50g polony, 1 slice cheese, 100g slap chips will be deducted.</Text>
+            {ingredientsOpen && cart.some(i => i.hasRecipe) && (
+              <Text style={[styles.recipeText, deductions.error ? { color: colors.errorDefault } : null]}>
+                {deductions.error ?? deductions.text ?? 'Checking the recipe...'}
+              </Text>
             )}
           </ScrollView>
         )}
@@ -227,7 +305,12 @@ export default function SalesScreen() {
               <Text style={styles.saleTotal2}>R{total.toFixed(2)}</Text>
             </View>
           </View>
-          <TouchableOpacity onPress={confirmSale} style={styles.confirmBtn} activeOpacity={0.85}>
+          <TouchableOpacity
+            onPress={confirmSale}
+            disabled={saving || cart.length === 0}
+            style={[styles.confirmBtn, (saving || cart.length === 0) && { opacity: 0.5 }]}
+            activeOpacity={0.85}
+          >
             <MaterialIcons name="payments" size={20} color={colors.onPrimary} />
             <Text style={styles.confirmBtnText}>Confirm Sale (R{total.toFixed(2)})</Text>
           </TouchableOpacity>

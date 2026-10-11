@@ -1,10 +1,56 @@
-import { open } from "@op-engineering/op-sqlite";
+import * as SQLite from "expo-sqlite";
 
-//  SQLCipher key should come from flutter_secure_storage's RN equivalent
-export const db = open({
-  name: "stockmate.db",
-  encryptionKey: process.env.SQLCIPHER_KEY,
+// The local database runs on expo-sqlite, which ships inside Expo Go and in every
+// development build (op-sqlite is a custom native module and needs its own build).
+//
+// Everything in the app talks to the database through the two calls below, so the
+// repositories do not care which SQLite library sits underneath:
+//
+//   await db.execute(sql, params?)      -> { rows: object[] }
+//   await db.transaction(async (tx) => { await tx.execute(sql, params?) ... })
+//
+// A transaction commits when the callback resolves and rolls back when it throws
+// (recordSale relies on that to undo a sale that runs out of stock halfway).
+// Transactions are queued one at a time, so two of them never overlap. While a
+// transaction is open, plain db.execute calls (enqueueSync writes the sync_queue row
+// this way) run on the same connection and so join that transaction, as they did before.
+const sqlite = SQLite.openDatabaseSync("stockmate.db");
+
+const clean = (params = []) =>
+  params.map((value) => (value === undefined ? null : value));
+
+const run = async (sql, params) => ({
+  rows: await sqlite.getAllAsync(sql, clean(params)),
 });
+
+let queue = Promise.resolve();
+let inTransaction = false;
+const inQueue = (task) => {
+  const result = queue.then(task);
+  queue = result.catch(() => {});
+  return result;
+};
+
+export const db = {
+  execute: (sql, params) =>
+    inTransaction ? run(sql, params) : inQueue(() => run(sql, params)),
+
+  transaction: (work) =>
+    inQueue(async () => {
+      await sqlite.execAsync("BEGIN");
+      inTransaction = true;
+      try {
+        const value = await work({ execute: run });
+        await sqlite.execAsync("COMMIT");
+        return value;
+      } catch (error) {
+        await sqlite.execAsync("ROLLBACK");
+        throw error;
+      } finally {
+        inTransaction = false;
+      }
+    }),
+};
 
 export async function runMigration() {
   await db.execute(`

@@ -1,5 +1,5 @@
 import { db } from "./db.js";
-import { supabase } from "../../../lib/supabase.js";
+import { supabase } from "../../../lib/supabase";
 
 export async function enqueueSync(entityType, entityID, operation, payload) {
   await db.execute(

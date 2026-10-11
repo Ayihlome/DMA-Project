@@ -3,7 +3,10 @@ import { View, Text, ScrollView, TouchableOpacity, Switch, KeyboardAvoidingView,
 import { router, useLocalSearchParams } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import { colors } from '../../theme/theme'
-import { useStore } from '../../store'
+import { useCases } from '../../backend/useCases/container'
+import { useUseCase } from '../../hooks/use-use-case'
+import type { SellableProduct } from '../Sales/data/productCards'
+import { Loading } from '../../components/common/ScreenState'
 import { CATEGORIES } from '../../data/types'
 import type { CategoryKey } from '../../data/types'
 import { Field } from '../Auth/AuthForm'
@@ -14,19 +17,24 @@ const parseNumber = (s: string) => (s.trim() === '' ? NaN : Number(s.trim().repl
 
 export default function ProductEditScreen() {
   const { id = 'new' } = useLocalSearchParams<{ id: string }>()
-  const insets = useSafeAreaInsets()
-  const { state, addProduct } = useStore()
+  const { data } = useUseCase<SellableProduct[]>(() => useCases.getSellableProducts({}))
 
-  const existing = id !== 'new' ? state.products.find(p => p.id === id) : undefined
+  // Wait for the saved product before drawing the form, so its fields start with the right values.
+  if (id !== 'new' && !data) return <Loading />
+  const existing = id !== 'new' ? data?.find(p => p.id === id) : undefined
+  return <ProductForm key={existing?.id ?? 'new'} existing={existing} />
+}
+
+function ProductForm({ existing }: { existing?: SellableProduct }) {
+  const insets = useSafeAreaInsets()
 
   const [name, setName] = useState(existing?.name ?? '')
-  const [detail, setDetail] = useState(existing?.detail ?? '')
   const [unit, setUnit] = useState(existing?.unit ?? '')
-  const [category, setCategory] = useState<CategoryKey>(existing?.category ?? 'pantry')
-  const [price, setPrice] = useState(existing ? String(existing.price) : '')
-  const [stock, setStock] = useState(existing ? String(existing.stock) : '0')
-  const [isComposite, setIsComposite] = useState(existing?.composite ?? false)
-  const [packSize, setPackSize] = useState(existing ? String(existing.packSize) : '1')
+  const [category, setCategory] = useState<CategoryKey>((existing?.category as CategoryKey | null) ?? 'pantry')
+  const [price, setPrice] = useState(existing ? String(existing.selling_price) : '')
+  const [stock, setStock] = useState(existing ? String(existing.stockOnHand) : '0')
+  const [isComposite, setIsComposite] = useState(!!existing?.is_composite)
+  const [packSize, setPackSize] = useState(existing ? String(existing.pack_size) : '1')
 
   const [saving, setSaving] = useState(false)
   const [error, setError] = useState<string | null>(null)
@@ -41,25 +49,36 @@ export default function ProductEditScreen() {
     if (!name.trim()) { setError('Give the product a name.'); return }
     if (!unit.trim()) { setError('Add a unit (e.g. 1L, 6 pack).'); return }
     if (isNaN(priceVal) || priceVal < 0) { setError('Enter a valid selling price.'); return }
-    if (isNaN(stockVal) || stockVal < 0) { setError('Enter a valid stock amount.'); return }
+    if (!isComposite && (isNaN(stockVal) || stockVal < 0)) { setError('Enter a valid stock amount.'); return }
 
     setSaving(true)
     setError(null)
 
     try {
-      if (isNew) {
-        addProduct({
-          name: name.trim(),
-          detail: detail.trim() || unit.trim(),
-          category,
-          price: priceVal,
-          stock: isComposite ? 0 : stockVal,
-          unit: unit.trim(),
-          unitPlural: unit.trim(),
-          packSize: isNaN(packVal) || packVal <= 0 ? 1 : packVal,
-        })
+      const packSizeValue = isNaN(packVal) || packVal <= 0 ? 1 : packVal
+      const result = existing
+        ? await useCases.updateProduct({
+            productID: existing.id,
+            name: name.trim(),
+            unit: unit.trim(),
+            sellingPrice: priceVal,
+            category,
+            packSize: packSizeValue,
+            stockOnHand: isComposite ? undefined : stockVal,
+          })
+        : await useCases.createProduct({
+            name: name.trim(),
+            unit: unit.trim(),
+            isComposite,
+            sellingPrice: priceVal,
+            category,
+            packSize: packSizeValue,
+            openingStock: isComposite ? 0 : stockVal,
+          })
+      if (!result.success) {
+        setError(result.errors.join(' '))
+        return
       }
-      // TODO: updateProduct action for editing existing products
       router.back()
     } catch (e: unknown) {
       setError(e instanceof Error ? e.message : 'Something went wrong.')
@@ -83,7 +102,6 @@ export default function ProductEditScreen() {
 
           <Field label="Product name" value={name} onChangeText={setName} placeholder="e.g. White bread" autoCapitalize="words" />
           <Field label="Unit / size" value={unit} onChangeText={setUnit} placeholder="e.g. 700g loaf, 1L, 6 pack" />
-          <Field label="Short description" value={detail} onChangeText={setDetail} placeholder="e.g. Sasko, sliced" />
 
           <Text style={styles.label}>Category</Text>
           <View style={styles.chips}>
@@ -112,7 +130,7 @@ export default function ProductEditScreen() {
               <Text style={styles.switchLabel}>Made to order (composite)</Text>
               <Text style={styles.switchHint}>Stock is derived from its recipe components</Text>
             </View>
-            <Switch value={isComposite} onValueChange={setIsComposite} trackColor={{ true: colors.primary }} />
+            <Switch value={isComposite} onValueChange={setIsComposite} disabled={!isNew} trackColor={{ true: colors.primary }} />
           </View>
 
           {!isComposite && (

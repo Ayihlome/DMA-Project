@@ -101,6 +101,16 @@ class SaleRepository {
     });
   }
 
+  async getSalesTotal(from, to) {
+    const { rows } = await db.execute(
+      `select coalesce(sum(total_amount), 0) as total
+       from sales
+       where timestamp >= ? and timestamp < ?`,
+      [from, to],
+    );
+    return Number(rows[0]?.total) || 0;
+  }
+
   async getTotalQuantitySold(productID, window) {
     const since = new Date(
       Date.now() - window * 24 * 60 * 60 * 1000,

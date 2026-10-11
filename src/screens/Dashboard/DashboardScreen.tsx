@@ -5,15 +5,33 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
 import { colors } from '../../theme/theme'
-import { SUMMARY, LOW_STOCK } from './data/dashboardData'
-import { ITEMS as RESTOCK_ITEMS } from '../Restock/data/restockData'
+import { useCases } from '../../backend/useCases/container'
+import { useUseCase, useOwnerId } from '../../hooks/use-use-case'
+import { nextRestockLabel, toLowStockItems, type DashboardSummary } from './data/summary'
+import { Loading, LoadError } from '../../components/common/ScreenState'
 import { styles } from './styles'
 
-const rand = (n: number) => `R${n.toLocaleString('en-ZA')}`
+const rand = (n: number) => `R${n.toLocaleString('en-ZA', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets()
-  const change = Math.round(((SUMMARY.salesToday - SUMMARY.salesYesterday) / SUMMARY.salesYesterday) * 100)
+  const ownerID = useOwnerId()
+  const { data, error, reload } = useUseCase<DashboardSummary>(() => useCases.getDashboardSummary({ ownerID }), [ownerID])
+
+  if (!data) {
+    return (
+      <View style={styles.screen}>
+        <AppHeader screenLabel="Today" />
+        {error ? <LoadError message={error} onRetry={reload} /> : <Loading />}
+      </View>
+    )
+  }
+
+  const SUMMARY = { ...data, nextRestock: nextRestockLabel(data.soonestStockoutDays) }
+  const LOW_STOCK = toLowStockItems(data)
+  const change = SUMMARY.salesYesterday > 0
+    ? Math.round(((SUMMARY.salesToday - SUMMARY.salesYesterday) / SUMMARY.salesYesterday) * 100)
+    : null
   const outSoon = LOW_STOCK.filter(i => i.level === 'out-soon').length
 
   return (
@@ -28,7 +46,9 @@ export default function DashboardScreen() {
           <Text style={styles.salesLabel}>Sales today</Text>
           <Text style={styles.salesValue}>{rand(SUMMARY.salesToday)}</Text>
           <Text style={styles.salesChange}>
-            {change >= 0 ? `${change}% more than yesterday` : `${Math.abs(change)}% less than yesterday`}
+            {change === null
+              ? 'No sales yesterday to compare with'
+              : change >= 0 ? `${change}% more than yesterday` : `${Math.abs(change)}% less than yesterday`}
           </Text>
         </View>
 
@@ -41,7 +61,7 @@ export default function DashboardScreen() {
           <View style={styles.stat}>
             <Text style={styles.statLabel}>Next restock</Text>
             <Text style={styles.statValue}>{SUMMARY.nextRestock}</Text>
-            <Text style={styles.statNote}>{RESTOCK_ITEMS.length} items on the list</Text>
+            <Text style={styles.statNote}>{SUMMARY.restockCount} items on the list</Text>
           </View>
         </View>
 
@@ -80,7 +100,9 @@ export default function DashboardScreen() {
           <MaterialIcons name="chevron_right" size={18} color={colors.primary} />
         </TouchableOpacity>
 
-        <Text style={styles.footnote}>Everything else is well stocked.</Text>
+        <Text style={styles.footnote}>
+          {LOW_STOCK.length === 0 ? 'Everything is well stocked.' : 'Everything else is well stocked.'}
+        </Text>
       </ScrollView>
 
       {/* Main action, always in reach of the thumb */}

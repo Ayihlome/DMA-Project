@@ -4,28 +4,26 @@ import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import { colors } from '../../theme/theme'
-import { useStore } from '../../store'
-import { available } from '../../data/inventory'
-import type { Product } from '../../data/types'
+import { useCases } from '../../backend/useCases/container'
+import { useUseCase } from '../../hooks/use-use-case'
+import type { SellableProduct } from '../Sales/data/productCards'
+import { Loading, LoadError } from '../../components/common/ScreenState'
 import { styles } from './styles'
 
 const rand = (n: number) => `R${n.toFixed(2)}`
 
-function statusText(state: Parameters<typeof available>[0], p: Product) {
-  if (p.composite) {
-    if (!p.recipe || p.recipe.length === 0) return { text: 'Needs a recipe', warn: true }
+function statusText(p: SellableProduct) {
+  if (p.is_composite) {
+    if (!p.hasRecipe) return { text: 'Needs a recipe', warn: true }
     return { text: 'Made to order' }
   }
-  const qty = available(state, p)
-  return { text: `${qty} in stock`, warn: qty < 5 }
+  return { text: `${p.stockOnHand} in stock`, warn: p.stockOnHand < 5 }
 }
 
 export default function ProductsScreen() {
   const insets = useSafeAreaInsets()
-  const { state } = useStore()
-  const products = [...state.products]
-    .filter(p => p.sellable)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  const { data, error, reload } = useUseCase<SellableProduct[]>(() => useCases.getSellableProducts({}))
+  const products = [...(data ?? [])].sort((a, b) => a.name.localeCompare(b.name))
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
@@ -35,14 +33,16 @@ export default function ProductsScreen() {
           <Text style={styles.addText}>Add a product</Text>
         </TouchableOpacity>
 
-        {products.length === 0 && (
+        {!data && (error ? <LoadError message={error} onRetry={reload} /> : <Loading />)}
+
+        {data && products.length === 0 && (
           <Text style={styles.hint}>No products yet. Add the first thing you sell.</Text>
         )}
 
         {products.length > 0 && (
           <View style={styles.list}>
             {products.map((p, i) => {
-              const s = statusText(state, p)
+              const s = statusText(p)
               return (
                 <TouchableOpacity
                   key={p.id}
@@ -57,7 +57,7 @@ export default function ProductsScreen() {
                   <View style={styles.rowText}>
                     <Text style={styles.rowName} numberOfLines={1}>{p.name}</Text>
                     <Text style={styles.rowMeta} numberOfLines={1}>
-                      {p.unit} · {rand(p.price)}
+                      {p.unit} · {rand(p.selling_price)}
                     </Text>
                   </View>
                   <Text style={[styles.rowStatus, s.warn && styles.rowWarn]}>{s.text}</Text>
