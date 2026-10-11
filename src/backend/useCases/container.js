@@ -1,5 +1,8 @@
 // Imports all engines and repos so that they can be called  by the frontendthrough a 'useCases' import
 
+//data syncing
+import { processSyncQueue, retryFailedSync } from "../data/local/syncqueue";
+
 //logging
 import "../../polyfills";
 import { runMigration } from "../data/local/db";
@@ -25,7 +28,7 @@ import { createGetDashboardKpiUseCase } from "./dashboardKPIs";
 import { createRecordSaleUseCase } from "./recordSale";
 import { createGenerateRestockPlanUseCase } from "./generateRestockPlan";
 
-import { createPreviewSaleDeductionUseCase } from "./previewSalleableProduct";
+import { createPreviewSaleDeductionUseCase } from "./previewSellableProducts";
 import { createCreateProductUseCase } from "./createProduct";
 import { createCreateSupplierUseCase } from "./createSupplier";
 import { createSetRecipeComponentsUseCase } from "./setRecipeComponents";
@@ -38,13 +41,8 @@ import { createGetSellableProductsUseCase } from "./getSellableProducts";
 import { createGetSupplierPricesUseCase } from "./getSupplierPrices";
 import { createSaveSupplierPriceUseCase } from "./saveSupplierPrice";
 import { createUpdateProductUseCase } from "./updateProduct";
+import { createGetRecipeUseCase } from "./getRecipe";
 import { createGetDashboardSummaryUseCase } from "./getDashboardSummary";
-import {
-  getLastSyncedAt,
-  getSyncCounts,
-  processSyncQueue,
-  retryFailedSync,
-} from "../data/local/syncqueue";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -90,13 +88,8 @@ const rawUseCases = {
     kpiCalculator,
     productRepository,
   }),
-  generateRestockPlan: createGenerateRestockPlanUseCase({
-    restockEngine,
-    kpiSnapshotRepository,
-    supplierPriceRepository,
-    productRepository,
-    stockRepository,
-  }),
+  generateRestockPlan,
+  getRecipe: createGetRecipeUseCase({ recipeRepository, productRepository }),
   previewSaleDeductions: createPreviewSaleDeductionUseCase({
     recipeEngine,
     productRepository,
@@ -129,28 +122,19 @@ const rawUseCases = {
     stockRepository,
     recipeRepository,
   }),
-  previewSaleDeductions: createPreviewSaleDeductionUseCase({
-    recipeEngine,
-    productRepository,
+  getSupplierPrices: createGetSupplierPricesUseCase({
+    supplierPriceRepository,
+    supplierRepository,
   }),
   saveSupplierPrice: createSaveSupplierPriceUseCase({
     supplierRepository,
     createSupplier,
     setSupplierPrice,
   }),
-  // Cloud backup. syncNow sends what is waiting in sync_queue to Supabase (see syncqueue.js).
-  // A phone that could not restore the shop yet (no signal at first sign-in) tries again here.
+  // { retryFailed: true } first gives rows that were parked as failed another go.
   syncNow: async (input) => {
-    if (input?.ownerID) await restoreFromCloud({ ownerID: input.ownerID });
-    return processSyncQueue({ ownerID: input?.ownerID });
-  },
-  getSyncStatus: async () => ({
-    ...(await getSyncCounts()),
-    lastSyncedAt: await getLastSyncedAt(),
-  }),
-  retryFailedSync: async () => {
-    await retryFailedSync();
-    return { success: true };
+    if (input?.retryFailed) await retryFailedSync();
+    return processSyncQueue();
   },
 };
 

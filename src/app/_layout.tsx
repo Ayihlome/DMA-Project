@@ -1,10 +1,13 @@
 import { DarkTheme, DefaultTheme, Stack, ThemeProvider } from 'expo-router';
 import * as SplashScreen from 'expo-splash-screen';
-import { useColorScheme } from 'react-native';
+import { useEffect } from 'react';
+import { AppState, useColorScheme } from 'react-native';
 
 import { AnimatedSplashOverlay } from '@/components/animated-icon';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { colors } from '@/theme/theme';
+import { useCases } from '../backend/useCases/container';
+
 
 // Pages opened on top of the tabs get a header with a back button
 const pageHeader = {
@@ -14,10 +17,7 @@ const pageHeader = {
   headerTitleStyle: { color: colors.textPrimary },
   headerShadowVisible: false,
 };
-import { runMigration } from '../backend/data/local/db';
 
-SplashScreen.preventAutoHideAsync();
-runMigration()
 
 export default function RootLayout() {
   const colorScheme = useColorScheme();
@@ -52,7 +52,29 @@ function RootNavigator() {
           <Stack.Screen name="reset-password" />
         </Stack.Protected>
       </Stack>
+      {signedIn && <AutoSync />}
       <AnimatedSplashOverlay />
     </>
   );
+}
+
+// Sends what is waiting in the sync queue to Supabase: when the owner signs in, when the app
+// comes back to the front, and once a minute while it stays open.
+function AutoSync() {
+  useEffect(() => {
+    const sync = (retryFailed = false) => {
+      useCases.syncNow({ retryFailed }).catch(() => {});
+    };
+    sync(true); // on start, rows parked as failed get another go
+    const timer = setInterval(() => sync(), 60_000);
+    const appState = AppState.addEventListener('change', (state) => {
+      if (state === 'active') sync();
+    });
+    return () => {
+      clearInterval(timer);
+      appState.remove();
+    };
+  }, []);
+
+  return null;
 }

@@ -30,6 +30,7 @@ class RecipeRepository {
         );
         await enqueueSync("recipe_components", row.id, "update", {
           is_deleted: true,
+          updated_at: now,
         });
       }
 
@@ -47,13 +48,16 @@ class RecipeRepository {
         );
 
         await enqueueSync("recipe_components", id, "insert", {
-          parentProductID,
-          componentProductID: component.componentProductID,
-          quantityRequired: component.quantityRequired,
+          id,
+          parent_product_id: parentProductID,
+          component_product_id: component.componentProductID,
+          quantity_required: component.quantityRequired,
+          updated_at: now,
+          is_deleted: false,
         });
       }
     });
   }
 }
 
-module.exports = RecipeRepository;
+export default RecipeRepository;

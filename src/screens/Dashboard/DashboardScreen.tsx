@@ -1,4 +1,4 @@
-import React from 'react'
+import React, { useEffect } from 'react'
 import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -10,6 +10,7 @@ import { useUseCase, useOwnerId } from '../../hooks/use-use-case'
 import { nextRestockLabel, toLowStockItems, type DashboardSummary } from './data/summary'
 import { Loading, LoadError } from '../../components/common/ScreenState'
 import { styles } from './styles'
+import { seedDemoData } from '../../backend/seed'
 
 const rand = (n: number) => `R${n.toLocaleString('en-ZA', { minimumFractionDigits: n % 1 ? 2 : 0, maximumFractionDigits: 2 })}`
 
@@ -17,6 +18,10 @@ export default function DashboardScreen() {
   const insets = useSafeAreaInsets()
   const ownerID = useOwnerId()
   const { data, error, reload } = useUseCase<DashboardSummary>(() => useCases.getDashboardSummary({ ownerID }), [ownerID])
+    // development only: fill an empty database with demo data once, then refresh
+  useEffect(() => {
+    if (__DEV__) seedDemoData().then((r) => r.seeded && reload()).catch((e) => console.warn(e.message))
+  }, [])
 
   if (!data) {
     return (

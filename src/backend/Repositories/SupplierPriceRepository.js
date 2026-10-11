@@ -1,4 +1,5 @@
 import { db } from "../data/local/db";
+import { enqueueSync } from "../data/local/syncqueue";
 
 class SupplierPriceRepository {
   async getPricesByProductId(productId) {
@@ -20,7 +21,6 @@ class SupplierPriceRepository {
 
   async setSupplierPrice(price) {
     const now = new Date().toISOString();
-    const id = price.id ?? crypto.randomUUID();
     await db.execute(
       `insert into supplier_prices
        (id, supplier_id, product_id, unit_price, minimum_order, updated_at)
@@ -30,7 +30,7 @@ class SupplierPriceRepository {
          minimum_order = excluded.minimum_order,
          updated_at = excluded.updated_at`,
       [
-        id,
+        price.id ?? crypto.randomUUID(),
         price.supplierID,
         price.productID,
         price.unitPrice,
@@ -38,8 +38,24 @@ class SupplierPriceRepository {
         now,
       ],
     );
+    // A repeat price keeps the id of the first one, so read back the id that is actually stored.
+    const { rows } = await db.execute(
+      `select id from supplier_prices where supplier_id = ? and product_id = ?`,
+      [price.supplierID, price.productID],
+    );
+    const id = rows[0].id;
+
+    await enqueueSync("supplier_prices", id, "upsert", {
+      id,
+      supplier_id: price.supplierID,
+      product_id: price.productID,
+      unit_price: price.unitPrice,
+      minimum_order: price.minimumOrder ?? null,
+      updated_at: now,
+    });
+
     return { ...price, id, updatedAt: now };
   }
 }
 
-module.exports = SupplierPriceRepository;
+export default SupplierPriceRepository;

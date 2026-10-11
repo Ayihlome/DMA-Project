@@ -45,9 +45,10 @@ class SaleRepository {
       );
 
       await enqueueSync("sales", saleID, "insert", {
-        ownerID,
+        id: saleID,
         timestamp,
-        totalAmount,
+        total_amount: totalAmount,
+        updated_at: now,
       });
 
       // 3. record every line item
@@ -68,9 +69,12 @@ class SaleRepository {
         );
 
         await enqueueSync("sale_line_items", lineItemID, "insert", {
-          saleID,
-          ...item,
-          ownerID,
+          id: lineItemID,
+          sale_id: saleID,
+          product_id: item.productID,
+          quantity_sold: item.quantitySold,
+          price_at_sale: item.priceAtSale,
+          updated_at: now,
         });
       }
 
@@ -87,15 +91,20 @@ class SaleRepository {
           [productID],
         );
         const resultingQty = rows[0].quantity_on_hand;
+        const movementID = crypto.randomUUID();
 
         await tx.execute(
           `insert into stock_movements (id, product_id, delta, resulting_quantity, reason, created_at)
            values (?, ?, ?, ?, 'sale_deduction', ?)`,
-          [crypto.randomUUID(), productID, -quantity, resultingQty, now],
+          [movementID, productID, -quantity, resultingQty, now],
         );
 
-        await enqueueSync("stock_items", productID, "update", {
+        await enqueueSync("stock_movements", movementID, "insert", {
+          id: movementID,
+          product_id: productID,
           delta: -quantity,
+          reason: "sale_deduction",
+          created_at: now,
         });
       }
     });

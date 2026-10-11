@@ -68,7 +68,23 @@ export const styles = StyleSheet.create({
   },
   switchLabel: { ...type.label, color: colors.textPrimary },
   switchHint: { ...type.caption, color: colors.textSecondary, marginTop: 2 },
-
+  
+  recipeBox: { gap: spacing.xs },
+  recipeRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
+  recipeName: { flex: 1, minWidth: 0 },
+  recipeInput: {
+    width: 88,
+    minHeight: 44,
+    paddingHorizontal: spacing.sm,
+    borderRadius: radius.sm,
+    borderWidth: 1,
+    borderColor: colors.borderDefault,
+    backgroundColor: colors.bgSurface,
+    textAlign: 'right',
+    ...type.body,
+    color: colors.textPrimary,
+  },
+  
   errorText: {
     ...type.label,
     color: colors.errorDefault,
