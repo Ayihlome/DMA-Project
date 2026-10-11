@@ -152,9 +152,19 @@ export async function runMigration() {
       payload_json text not null,
       status text not null default 'pending',
       retry_count integer not null default 0,
-      created_at text not null
+      created_at text not null,
+      synced_at text,
+      last_error text
     );
   `);
+
+  // Databases created before these columns existed get them added (safe to re-run).
+  const queueColumns = await db.execute(`pragma table_info(sync_queue)`);
+  for (const column of ["synced_at", "last_error"]) {
+    if (!queueColumns.rows.some((c) => c.name === column)) {
+      await db.execute(`alter table sync_queue add column ${column} text`);
+    }
+  }
 
   await db.execute(
     `create table if not exists suppliers (
@@ -187,6 +197,42 @@ export async function runMigration() {
   }
 
   await migrateSupplierTables();
+
+  // Small key/value store for things that belong to this phone (which account owns the data,
+  // the restock budget, ...). These are never sent to Supabase.
+  await db.execute(`
+    create table if not exists device_settings (
+      key text primary key,
+      value text,
+      updated_at text not null
+    );
+  `);
+
+  // Restock orders the owner saved. Kept on this phone only (not synced yet). supplier_id has no
+  // foreign key on purpose: migrateSupplierTables() renames the suppliers table.
+  await db.execute(`
+    create table if not exists purchase_orders (
+      id text primary key,
+      status text not null default 'ordered',
+      budget real,
+      regular_stock real not null default 0,
+      created_at text not null,
+      updated_at text not null
+    );
+  `);
+
+  await db.execute(`
+    create table if not exists purchase_order_lines (
+      id text primary key,
+      purchase_order_id text not null references purchase_orders(id),
+      product_id text not null references products(id),
+      supplier_id text,
+      supplier_name text,
+      quantity real not null,
+      unit_price real not null,
+      received_at text
+    );
+  `);
 }
 
 async function migrateSupplierTables() {
