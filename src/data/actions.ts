@@ -5,6 +5,7 @@
  */
 import type { AppState, CategoryKey, Product, Profile, Purchase, PurchaseLine, SaleLine, SyncOp } from './types'
 import { deductionsFor, productById, unitQty } from './inventory'
+import type { BackupStatus } from '../lib/cloudBackup'
 
 export type Result = { ok: true; message: string } | { ok: false; message: string }
 
@@ -33,10 +34,15 @@ export type StoreApi = {
   receivePurchase: (id: string) => void
   cancelPurchase: (id: string) => void
   addProduct: (input: ProductInput) => Product
+  updateProduct: (id: string, input: ProductInput) => void
   upsertSupplierPrice: (input: SupplierPriceInput) => void
   setPreferredSupplier: (productId: string, supplierId: string) => void
   setBudget: (n: number) => void
   updateProfile: (p: Partial<Profile>) => void
+  /** Whether the last snapshot upload succeeded. Never optimistic. */
+  backupStatus: BackupStatus
+  /** Uploads a snapshot now instead of waiting for the debounce. */
+  backUpNow: () => void
   /** Async so the mobile store can await device storage; the web store resolves immediately. */
   setPhoto: (productId: string, dataUrl: string) => Promise<Result>
   removePhoto: (productId: string) => void
@@ -45,7 +51,10 @@ export type StoreApi = {
 
 export const STATE_KEY = 'stockevo-state-v1'
 export const PHOTO_KEY = 'stockevo-photos'
-export const SYNC_DELAY_MS = 1500
+/** Which account the state on this device belongs to, so a second owner signing in here never inherits it. */
+export const OWNER_KEY = 'stockevo-owner'
+/** How long to wait after a change before uploading a snapshot. */
+export const BACKUP_DEBOUNCE_MS = 5000
 
 export const uid = () => Math.random().toString(36).slice(2, 10)
 
@@ -59,8 +68,8 @@ export function isValidState(x: unknown): x is AppState {
   return !!x && typeof x === 'object' && (x as AppState).version === 1
 }
 
-/** There is no backend yet, so acknowledging queued operations is simulated. */
-export function markSynced(s: AppState, now = Date.now()): AppState {
+/** Called once a snapshot upload has actually succeeded, never on a timer. */
+export function markBackedUp(s: AppState, now = Date.now()): AppState {
   return {
     ...s,
     queue: s.queue.map((q) => (q.status === 'pending' ? { ...q, status: 'synced' as const } : q)).slice(-50),
@@ -128,6 +137,17 @@ export function cancelPurchase(s: AppState, id: string): AppState {
   )
 }
 
+const iconByCategory: Record<CategoryKey, string> = {
+  bakery: 'bakery_dining',
+  dairy: 'egg',
+  pantry: 'grain',
+  hot: 'lunch_dining',
+  beverages: 'local_bar',
+  ingredients: 'kitchen',
+}
+
+const packLabelFor = (packSize: number, unit: string) => (packSize === 1 ? `single ${unit}` : `pack of ${packSize}`)
+
 export function createProduct(s: AppState, input: ProductInput): Product {
   const base = input.name
     .trim()
@@ -139,14 +159,6 @@ export function createProduct(s: AppState, input: ProductInput): Product {
   while (s.products.some((product) => product.id === id)) id = `${base}-${suffix++}`
   const unit = input.unit.trim().toLowerCase()
   const packSize = Math.max(1, input.packSize)
-  const iconByCategory: Record<CategoryKey, string> = {
-    bakery: 'bakery_dining',
-    dairy: 'egg',
-    pantry: 'grain',
-    hot: 'lunch_dining',
-    beverages: 'local_bar',
-    ingredients: 'kitchen',
-  }
   return {
     id,
     name: input.name.trim(),
@@ -160,12 +172,43 @@ export function createProduct(s: AppState, input: ProductInput): Product {
     unitPlural: input.unitPlural.trim().toLowerCase(),
     stock: Math.max(0, input.stock),
     packSize,
-    packLabel: packSize === 1 ? `single ${unit}` : `pack of ${packSize}`,
+    packLabel: packLabelFor(packSize, unit),
   }
 }
 
 export const addProduct = (s: AppState, product: Product): AppState =>
   queued({ ...s, products: [...s.products, product] }, 'product')
+
+/** Edits an existing product, recomputing the fields derived from category and pack size. */
+export function updateProduct(s: AppState, id: string, input: ProductInput): AppState {
+  const unit = input.unit.trim().toLowerCase()
+  const packSize = Math.max(1, input.packSize)
+  return queued(
+    {
+      ...s,
+      products: s.products.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              name: input.name.trim(),
+              detail: input.detail?.trim() || p.detail,
+              category: input.category,
+              icon: iconByCategory[input.category],
+              price: Math.max(0, input.price),
+              // Composite stock stays derived from the recipe, so it is left alone
+              stock: p.composite ? p.stock : Math.max(0, input.stock),
+              unit,
+              unitPlural: input.unitPlural.trim().toLowerCase(),
+              packSize,
+              packLabel: packLabelFor(packSize, unit),
+            }
+          : p,
+      ),
+    },
+    'product',
+    'update',
+  )
+}
 
 export function upsertSupplierPrice(s: AppState, input: SupplierPriceInput, now = Date.now()): AppState {
   const { productId, unitPrice, minOrder, location } = input

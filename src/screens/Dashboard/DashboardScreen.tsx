@@ -5,15 +5,17 @@ import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
 import { colors } from '../../theme/theme'
-import { SUMMARY, LOW_STOCK } from './data/dashboardData'
-import { ITEMS as RESTOCK_ITEMS } from '../Restock/data/restockData'
 import { styles } from './styles'
+import { useDashboardData } from './useDashboardData'
 
 const rand = (n: number) => `R${n.toLocaleString('en-ZA')}`
 
 export default function DashboardScreen() {
   const insets = useSafeAreaInsets()
-  const change = Math.round(((SUMMARY.salesToday - SUMMARY.salesYesterday) / SUMMARY.salesYesterday) * 100)
+  const { SUMMARY, LOW_STOCK, RESTOCK_ITEMS } = useDashboardData()
+  const change = SUMMARY.salesYesterday > 0
+    ? Math.round(((SUMMARY.salesToday - SUMMARY.salesYesterday) / SUMMARY.salesYesterday) * 100)
+    : 0
   const outSoon = LOW_STOCK.filter(i => i.level === 'out-soon').length
 
   return (

@@ -62,4 +62,19 @@ export const styles = StyleSheet.create({
   switchRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.md, gap: 4 },
   switchText: { ...type.label, color: colors.textSecondary },
   switchLink: { ...type.labelBold, color: colors.primary },
+
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.xs2 },
+  checkbox: {
+    width: 24,
+    height: 24,
+    borderRadius: radius.sm,
+    borderWidth: 2,
+    borderColor: colors.borderDefault,
+    alignItems: 'center',
+    justifyContent: 'center',
+    marginTop: 1,
+  },
+  checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
+  consentText: { ...type.label, color: colors.textSecondary, flex: 1, lineHeight: 20 },
+  consentLink: { ...type.labelBold, color: colors.primary },
 })
