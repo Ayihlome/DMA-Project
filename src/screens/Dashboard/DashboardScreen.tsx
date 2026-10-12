@@ -20,7 +20,7 @@ export default function DashboardScreen() {
   const { data, error, reload } = useUseCase<DashboardSummary>(() => useCases.getDashboardSummary({ ownerID }), [ownerID])
     // development only: fill an empty database with demo data once, then refresh
   useEffect(() => {
-    if (__DEV__) seedDemoData().then((r) => r.seeded && reload()).catch((e) => console.warn(e.message))
+    if (__DEV__) seedDemoData().then((r) => { if (r.seeded) reload() }).catch((e) => console.warn(e.message))
   }, [])
 
   if (!data) {
