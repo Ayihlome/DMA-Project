@@ -93,7 +93,7 @@ export default function SellHeader({
               accessibilityState={{ selected: on }}
               accessibilityLabel={label}
               style={[styles.tab, on ? styles.tabOn : styles.tabParked]}
-              hitSlop={4}
+              hitSlop={5}
             >
               <Text style={[styles.tabText, on && styles.tabTextOn]} numberOfLines={1}>
                 {label}
@@ -106,7 +106,7 @@ export default function SellHeader({
           disabled={!active || active.lines.length === 0}
           accessibilityLabel="Park this sale and start a new one"
           style={[styles.tab, styles.tabNew, (!active || active.lines.length === 0) && styles.tabNewOff]}
-          hitSlop={4}
+          hitSlop={5}
         >
           <Text style={styles.tabNewText}>+ New</Text>
         </PressableScale>

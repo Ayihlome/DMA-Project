@@ -1,5 +1,5 @@
 import React, { useEffect, useMemo, useState } from 'react'
-import { StyleSheet, Text, View, type StyleProp, type TextStyle } from 'react-native'
+import { StyleSheet, Text, useWindowDimensions, View, type StyleProp, type TextStyle } from 'react-native'
 import Animated, {
   Easing,
   useAnimatedStyle,
@@ -66,12 +66,36 @@ export default function RollingNumber({
   )
 }
 
+/**
+ * How tall one digit is, worked out from the style rather than waiting for a
+ * layout event. Scaled by the phone's text-size setting, because React Native
+ * scales text (and its line height) by it too.
+ */
+function lineHeightOf(style: StyleProp<TextStyle>) {
+  const flat = StyleSheet.flatten(style) ?? {}
+  return flat.lineHeight ?? Math.round((flat.fontSize ?? 14) * 1.25)
+}
+
 function Digit({ char, style }: { char: string; style?: StyleProp<TextStyle> }) {
   const reduced = useReducedMotion()
+  const { fontScale } = useWindowDimensions()
   const target = Number(char)
   const offset = useSharedValue(target)
-  // Measured, not assumed — font scaling makes any constant wrong
-  const [lineHeight, setLineHeight] = useState(0)
+  /**
+   * Starts from the style's line height so the digit is visible on the very
+   * first frame. This used to start hidden at height 0 and wait for onLayout —
+   * and where that event never fired (a child of a clipped, zero-height view
+   * is exactly where some platforms skip it), the digits stayed invisible for
+   * good while the "R" and commas around them showed. onLayout now only
+   * corrects the height if the real line differs.
+   *
+   * `base` goes on the Text, which React Native scales by the text-size
+   * setting itself; the window and the roll use the scaled height, which is
+   * what's actually drawn. Scaling `base` first would scale it twice.
+   */
+  const base = lineHeightOf(style)
+  const [measured, setMeasured] = useState(0)
+  const lineHeight = measured || Math.ceil(base * fontScale)
 
   useEffect(() => {
     if (reduced) {
@@ -82,19 +106,27 @@ function Digit({ char, style }: { char: string; style?: StyleProp<TextStyle> }) 
     offset.set(withTiming(target, { duration: DURATION.base, easing: EASE_OUT }))
   }, [target, reduced, offset])
 
+  // Always attached, so the strip is positioned from the first frame
   const stripStyle = useAnimatedStyle(() => ({
     transform: [{ translateY: -offset.get() * lineHeight }],
   }))
 
   return (
-    <View style={[styles.window, lineHeight > 0 ? { height: lineHeight } : styles.measuring]}>
-      <Animated.View style={lineHeight > 0 ? stripStyle : undefined}>
+    <View style={[styles.window, { height: lineHeight }]}>
+      <Animated.View style={stripStyle}>
         {DIGITS.map((d, i) => (
           <Text
             key={d}
-            style={[styles.char, style]}
+            style={[styles.char, style, { lineHeight: base }]}
             // Measure once off the first cell; they're all identical
-            onLayout={i === 0 ? (e) => setLineHeight(e.nativeEvent.layout.height) : undefined}
+            onLayout={
+              i === 0
+                ? (e) => {
+                    const h = Math.ceil(e.nativeEvent.layout.height)
+                    if (h > 0 && h !== measured) setMeasured(h)
+                  }
+                : undefined
+            }
           >
             {d}
           </Text>
@@ -108,7 +140,6 @@ const styles = StyleSheet.create({
   row: { flexDirection: 'row', alignItems: 'center', flexShrink: 1, minWidth: 0 },
   // Clips the strip down to a single digit
   window: { overflow: 'hidden' },
-  measuring: { opacity: 0, height: 0 },
   char: {
     // Tabular figures keep every digit the same width, so the strip doesn't
     // jitter sideways as values change

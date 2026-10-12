@@ -1,8 +1,11 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ScrollView, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
-import Animated, { FadeInDown, FadeOutDown } from 'react-native-reanimated'
+import { Platform, Pressable, ScrollView, Share, StyleSheet, Text, View, type LayoutChangeEvent } from 'react-native'
+import AsyncStorage from '@react-native-async-storage/async-storage'
+import Animated, { FadeIn, FadeInDown, FadeOut, FadeOutDown } from 'react-native-reanimated'
 import * as Haptics from 'expo-haptics'
+import { router, useLocalSearchParams } from 'expo-router'
 import { useTabBarSpace } from '../../components/nav/TabBar'
+import ActionToast, { type Toast } from '../../components/ui/ActionToast'
 import { useStore } from '../../store'
 import { DEFAULT_SELL_GRID } from '../../data/actions'
 import { QUICK_AMOUNT_ID, type PaymentMethod, type Product } from '../../data/types'
@@ -24,10 +27,12 @@ import {
   lastUsedItem,
   menuTileId,
   orderTiles,
+  receiptText,
   repriceDraft,
   shortName,
   tileIdFor,
   tileName,
+  tileEmoji,
   tileQty,
   tileSales,
   type AddItem,
@@ -42,6 +47,15 @@ const SIDE = 16
 
 const TOAST_ENTER = FadeInDown.duration(200)
 const TOAST_EXIT = FadeOutDown.duration(160)
+const TIP_IN = FadeIn.duration(200)
+const TIP_OUT = FadeOut.duration(160)
+
+/** Set once the owner has seen the press-and-hold tip, per phone. */
+const TIP_KEY = 'stockevo-tip-hold'
+
+/** Phones always have a share sheet; a browser only sometimes does. */
+const canShare = () =>
+  Platform.OS !== 'web' || (typeof navigator !== 'undefined' && typeof navigator.share === 'function')
 
 /**
  * Quick sell — the most important screen. Speed first: most sales are taps,
@@ -67,9 +81,34 @@ export default function QuickSellScreen() {
   const [editing, setEditing] = useState(false)
   const [payOpen, setPayOpen] = useState(false)
   const [menuEdit, setMenuEdit] = useState<MenuEdit | null>(null)
-  const [toast, setToast] = useState<string | null>(null)
+  const [toast, setToast] = useState<Toast | null>(null)
+  const clearToast = useCallback(() => setToast(null), [])
+  // Shown once per phone, until the owner taps "Got it" or holds a tile
+  const [showTip, setShowTip] = useState(false)
   const [panelHeight, setPanelHeight] = useState(200)
   const [gridWidth, setGridWidth] = useState(0)
+
+  // Profile → "Edit sell grid" arrives as /sales?edit=1: open in edit mode, then
+  // drop the param so coming back to the tab later doesn't re-open it
+  // Reacting to the param during render (React's "adjust state when a prop
+  // changes" pattern), not in an effect: an effect would render once without
+  // edit mode first, then again with it.
+  const { edit } = useLocalSearchParams<{ edit?: string }>()
+  // Starts at undefined, not `edit`: if Sell's very first render already has
+  // edit=1 (the tab wasn't open yet), that still has to count as a change
+  const [seenEdit, setSeenEdit] = useState<string | undefined>(undefined)
+  if (edit !== seenEdit) {
+    setSeenEdit(edit)
+    if (edit === '1') {
+      setSearching(false)
+      setQuery('')
+      setEditing(true)
+    }
+  }
+  // Clearing the URL is the outside-world part, so that one is an effect
+  useEffect(() => {
+    if (edit === '1') router.setParams({ edit: undefined })
+  }, [edit])
 
   // Sheet hand-offs: what to open once the current sheet has finished leaving
   const pendingEdit = useRef<MenuEdit | null>(null)
@@ -111,10 +150,19 @@ export default function QuickSellScreen() {
   const cell = gridWidth ? Math.floor((gridWidth - GAP * (COLUMNS - 1)) / COLUMNS) : 0
 
   useEffect(() => {
-    if (!toast) return
-    const t = setTimeout(() => setToast(null), 2600)
-    return () => clearTimeout(t)
-  }, [toast])
+    let alive = true
+    AsyncStorage.getItem(TIP_KEY)
+      .then((seen) => alive && !seen && setShowTip(true))
+      .catch(() => {})
+    return () => {
+      alive = false
+    }
+  }, [])
+
+  const dismissTip = useCallback(() => {
+    setShowTip(false)
+    AsyncStorage.setItem(TIP_KEY, '1').catch(() => {})
+  }, [])
 
   // Never leave a repeat running if the screen goes away mid-hold
   useEffect(
@@ -182,6 +230,7 @@ export default function QuickSellScreen() {
     }
     add(target.item, 1, target.product)
     setHolding(target)
+    if (showTip) dismissTip() // they've found it
     if (holdTimer.current) clearInterval(holdTimer.current)
     holdTimer.current = setInterval(() => add(target.item, 1, target.product), HOLD_MS)
   }
@@ -203,14 +252,27 @@ export default function QuickSellScreen() {
     const total = draftTotal(active)
     const result = store.recordSale(draftToSale(active), { payment, cashGiven })
     if (!result.ok) {
-      setToast(result.message)
+      setToast({ message: result.message })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       return
     }
+    // Built before the tab is cleared: the receipt is this sale's lines
+    const receipt = receiptText({
+      shop: store.state.profile.storeName,
+      lines: active.lines,
+      products,
+      total,
+      payment,
+      cashGiven,
+    })
     drafts.finishActive()
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     const change = payment === 'Cash' && cashGiven != null ? Math.round((cashGiven - total) * 100) / 100 : 0
-    setToast(`Sale saved · ${money(total)} · ${payment}${change > 0 ? ` · change ${money(change)}` : ''}`)
+    setToast({
+      message: `Sale saved · ${money(total)} · ${payment}${change > 0 ? ` · change ${money(change)}` : ''}`,
+      // The phone's share sheet: WhatsApp, SMS, whatever the customer uses
+      action: canShare() ? { label: 'Share', onPress: () => void Share.share({ message: receipt }).catch(() => {}) } : undefined,
+    })
   }
 
   // --- Edit grid -------------------------------------------------------------
@@ -277,6 +339,18 @@ export default function QuickSellScreen() {
         onQuery={setQuery}
       />
 
+      {showTip && !editing ? (
+        <Animated.View entering={TIP_IN} exiting={TIP_OUT} style={styles.tip}>
+          <Text style={styles.tipText}>
+            <Text style={styles.tipStrong}>Tip: </Text>
+            hold a tile to keep adding it. Let go to stop.
+          </Text>
+          <Pressable onPress={dismissTip} accessibilityRole="button" accessibilityLabel="Got it" hitSlop={10}>
+            <Text style={styles.tipAction}>Got it</Text>
+          </Pressable>
+        </Animated.View>
+      ) : null}
+
       <View style={styles.multiplier}>
         {editing ? (
           <Text style={styles.editHint}>Hold and drag to move · ◀ ▶ to nudge · × to hide</Text>
@@ -308,6 +382,7 @@ export default function QuickSellScreen() {
               <View key={t.id} style={{ width: cell }}>
                 <SellTile
                   tile={t}
+                  emoji={tileEmoji(t)}
                   title={tileName(t)}
                   subtitle={subtitleFor(t)}
                   qty={tileQty(t, active, store.state.products)}
@@ -351,9 +426,9 @@ export default function QuickSellScreen() {
         />
       )}
 
-      {holding || toast ? (
+      {holding ? (
         <Animated.View
-          key={holding ? 'hold' : toast}
+          key="hold"
           entering={TOAST_ENTER}
           exiting={TOAST_EXIT}
           style={[styles.toast, { bottom: panelHeight + space.sm }]}
@@ -361,12 +436,11 @@ export default function QuickSellScreen() {
           pointerEvents="none"
         >
           <Text style={styles.toastText} numberOfLines={2}>
-            {holding
-              ? `Adding ${shortName(holding.product, holding.item.price, holding.item.label)} · ${holdingQty} in sale · let go to stop`
-              : toast}
+            {`Adding ${shortName(holding.product, holding.item.price, holding.item.label)} · ${holdingQty} in sale · let go to stop`}
           </Text>
         </Animated.View>
       ) : null}
+      <ActionToast toast={holding ? null : toast} bottom={panelHeight + space.sm} onDone={clearToast} />
 
       <GroupSheet
         tile={groupTile}
@@ -388,7 +462,7 @@ export default function QuickSellScreen() {
         edit={menuEdit}
         onSaved={(product, group) => {
           reopenGroup.current = group
-          setToast(product ? `${product.name} saved to ${group}` : `Removed from ${group}`)
+          setToast({ message: product ? `${product.name} saved to ${group}` : `Removed from ${group}` })
         }}
         onClose={() => {
           setMenuEdit(null)
@@ -437,4 +511,18 @@ const styles = StyleSheet.create({
   },
   toastText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, color: colors.surface },
   editHint: { ...type.caption, color: colors.muted, paddingVertical: space.sm },
+  tip: {
+    flexDirection: 'row',
+    alignItems: 'center',
+    gap: space.md,
+    marginHorizontal: SIDE,
+    marginTop: space.md,
+    paddingVertical: space.md,
+    paddingHorizontal: space.lg,
+    borderRadius: radius.md,
+    backgroundColor: colors.brandSoft,
+  },
+  tipText: { ...type.caption, color: colors.ink, flex: 1 },
+  tipStrong: { fontFamily: fonts.bold },
+  tipAction: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink, textDecorationLine: 'underline' },
 })

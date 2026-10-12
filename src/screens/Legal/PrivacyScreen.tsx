@@ -1,7 +1,7 @@
 import React from 'react'
 import { View, Text, ScrollView, StyleSheet } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import { colors, spacing, type } from '../../theme/theme'
+import { colors, fonts, space } from '../../theme/tokens'
 
 function Section({ heading, children }: { heading: string; children: React.ReactNode }) {
   return (
@@ -23,7 +23,7 @@ export default function PrivacyScreen() {
       >
         <Text style={styles.title}>Privacy notice</Text>
         <Text style={styles.intro}>
-          StockMate is a stock-keeping app for small shops. This notice explains what it stores about
+          StockEvo is a stock-keeping app for small shops. This notice explains what it stores about
           you and your shop, why, and how to get rid of it. It follows South Africa&apos;s Protection of
           Personal Information Act (POPIA).
         </Text>
@@ -64,7 +64,7 @@ export default function PrivacyScreen() {
 
         <Section heading="Measurement during the study">
           <Text style={styles.body}>
-            While StockMate is being evaluated, the app records how long recording a sale takes and
+            While StockEvo is being evaluated, the app records how long recording a sale takes and
             whether the stock deducted matched what the recipe expected. These measurements are tied
             to your account but contain no personal detail beyond that, and are used only to report
             on whether the app works as intended.
@@ -81,7 +81,7 @@ export default function PrivacyScreen() {
         <Section heading="Your rights">
           <Text style={styles.body}>
             You may see your data, correct it, or have it deleted. Your name and shop details can be
-            edited on the Profile screen. To delete everything, use &quot;Delete my account&quot; on the
+            edited on the Profile screen. To delete everything, use &quot;Delete account&quot; on the
             Profile screen: it removes your account, your backup and every row belonging to it from
             the database, and erases your shop&apos;s data and photos from this device. This cannot be
             undone.
@@ -101,11 +101,11 @@ export default function PrivacyScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bgBase },
-  scroll: { paddingHorizontal: spacing.md, paddingTop: spacing.md, maxWidth: 640, width: '100%', alignSelf: 'center' },
-  title: { ...type.h1, color: colors.textPrimary, marginBottom: spacing.sm },
-  intro: { ...type.body, color: colors.textSecondary, lineHeight: 22, marginBottom: spacing.md },
-  section: { marginBottom: spacing.md, gap: spacing.xs2 },
-  heading: { ...type.bodyMedium, color: colors.textPrimary, fontWeight: '700' },
-  body: { ...type.body, color: colors.textSecondary, lineHeight: 22 },
+  screen: { flex: 1, backgroundColor: colors.surface },
+  scroll: { paddingHorizontal: 28, paddingTop: space.lg, maxWidth: 640, width: '100%', alignSelf: 'center' },
+  title: { fontFamily: fonts.extrabold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, color: colors.ink, marginBottom: space.md },
+  intro: { fontFamily: fonts.medium, fontSize: 16, lineHeight: 24, color: colors.quiet, marginBottom: space.xl },
+  section: { marginBottom: space.xl, gap: space.sm },
+  heading: { fontFamily: fonts.bold, fontSize: 17, lineHeight: 22, color: colors.ink },
+  body: { fontFamily: fonts.medium, fontSize: 15, lineHeight: 23, color: colors.quiet },
 })

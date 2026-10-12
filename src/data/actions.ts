@@ -30,6 +30,8 @@ export type ProductInput = {
   unit: string
   unitPlural: string
   packSize: number
+  /** What the pack is called — "tray", "crate". Absent keeps the current name. */
+  packName?: string
 }
 
 /** The API both store providers expose through `useStore()`. */
@@ -49,6 +51,12 @@ export type StoreApi = {
   addIngredient: (input: IngredientInput) => Product
   createOrderList: (lines: OrderInput) => Purchase[]
   receivePurchase: (id: string) => void
+  /** Records a shopping trip as delivered purchases and adds the stock. Returns the purchase ids, for Undo. */
+  receiveRestock: (lines: OrderInput) => string[]
+  /** Takes a recorded trip back out. */
+  undoRestock: (purchaseIds: string[]) => void
+  /** The day the owner goes shopping, 0 = Sunday … 6 = Saturday. */
+  setRestockDay: (day: number) => void
   cancelPurchase: (id: string) => void
   addProduct: (input: ProductInput) => Product
   updateProduct: (id: string, input: ProductInput) => void
@@ -212,6 +220,58 @@ export function receivePurchase(s: AppState, id: string, now = Date.now()): AppS
   )
 }
 
+/**
+ * "Bought it · update stock": records what was bought as delivered purchases,
+ * one per supplier, and adds it to stock — in one change, so the shop is never
+ * left with a purchase saved but the stock not yet added.
+ *
+ * Adding onto negative stock is deliberate: an item sold past zero and then
+ * restocked lands on the true number.
+ */
+export function receiveRestock(s: AppState, lines: OrderInput, now = Date.now()): AppState {
+  const clean = lines.filter((l) => l.qty > 0)
+  if (!clean.length) return s
+  const created = planOrders(s, clean, now)
+  let next = addOrders(s, created)
+  for (const po of created) next = receivePurchase(next, po.id, now)
+  return next
+}
+
+/**
+ * Commits purchases already planned with planOrders: records them and adds
+ * the stock. Split from receiveRestock so the store can plan first (to know
+ * the purchase ids, for Undo) and then commit against the latest state.
+ */
+export function receivePlanned(s: AppState, created: Purchase[], now = Date.now()): AppState {
+  let next = addOrders(s, created)
+  for (const po of created) next = receivePurchase(next, po.id, now)
+  return next
+}
+
+/**
+ * Undo for "Bought it": takes those purchases back out and subtracts what they
+ * added. Subtracting rather than restoring a snapshot keeps any sale made in
+ * between — the stock ends up exactly as if the trip hadn't been recorded.
+ */
+export function undoRestock(s: AppState, purchaseIds: string[]): AppState {
+  const undo = s.purchases.filter((p) => purchaseIds.includes(p.id) && p.status === 'delivered')
+  if (!undo.length) return s
+  const take = new Map<string, number>()
+  for (const po of undo) for (const l of po.lines) take.set(l.productId, (take.get(l.productId) ?? 0) + l.qty)
+  return queued(
+    {
+      ...s,
+      products: s.products.map((p) => (take.has(p.id) ? { ...p, stock: Math.round((p.stock - take.get(p.id)!) * 1000) / 1000 } : p)),
+      purchases: s.purchases.filter((p) => !purchaseIds.includes(p.id)),
+    },
+    'stock',
+    'update',
+  )
+}
+
+export const setRestockDay = (s: AppState, day: number): AppState =>
+  day >= 0 && day <= 6 ? { ...s, restockDay: Math.floor(day) } : s
+
 export function cancelPurchase(s: AppState, id: string): AppState {
   return queued(
     { ...s, purchases: s.purchases.map((p) => (p.id === id && p.status !== 'delivered' ? { ...p, status: 'cancelled' } : p)) },
@@ -230,7 +290,8 @@ const iconByCategory: Record<CategoryKey, string> = {
   other: 'sell',
 }
 
-const packLabelFor = (packSize: number, unit: string) => (packSize === 1 ? `single ${unit}` : `pack of ${packSize}`)
+const packLabelFor = (packSize: number, unit: string, packName?: string) =>
+  packSize === 1 ? `single ${unit}` : `${packName?.trim().toLowerCase() || 'pack'} of ${packSize}`
 
 export function createProduct(s: AppState, input: ProductInput): Product {
   const base = input.name
@@ -256,7 +317,7 @@ export function createProduct(s: AppState, input: ProductInput): Product {
     unitPlural: input.unitPlural.trim().toLowerCase(),
     stock: Math.max(0, input.stock),
     packSize,
-    packLabel: packLabelFor(packSize, unit),
+    packLabel: packLabelFor(packSize, unit, input.packName),
   }
 }
 
@@ -279,12 +340,17 @@ export function updateProduct(s: AppState, id: string, input: ProductInput): App
               category: input.category,
               icon: iconByCategory[input.category],
               price: Math.max(0, input.price),
-              // Composite stock stays derived from the recipe, so it is left alone
-              stock: p.composite ? p.stock : Math.max(0, input.stock),
+              // Editing a product never touches its stock: that changes through
+              // counts, sales and restocks. Clamping here used to zero an
+              // oversold item and wipe its "check this" flag.
+              stock: p.stock,
               unit,
               unitPlural: input.unitPlural.trim().toLowerCase(),
               packSize,
-              packLabel: packLabelFor(packSize, unit),
+              // Keep "crate of 10" when nothing about the pack changed, instead
+              // of renaming it to the generic "pack of 10"
+              packLabel:
+                input.packName || packSize !== p.packSize ? packLabelFor(packSize, unit, input.packName) : p.packLabel,
             }
           : p,
       ),

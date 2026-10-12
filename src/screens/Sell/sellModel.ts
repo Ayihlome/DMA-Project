@@ -7,6 +7,7 @@ import {
   FAMILIES,
   QUICK_AMOUNT_ID,
   type Family,
+  type PaymentMethod,
   type Product,
   type Sale,
   type SellGridSettings,
@@ -295,4 +296,80 @@ export function cashOptions(total: number): { key: string; label: string; amount
     if (up > total) out.push({ key: `up-${up}`, label: money(up, { whole: true }), amount: up })
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// Pictures on tiles
+// ---------------------------------------------------------------------------
+
+/**
+ * Emoji rather than platform icons: they look the same on every phone, there's
+ * no gap to fall into (iOS has no bread symbol at all — it was showing a
+ * birthday cake), and a picture is recognised faster than a word is read,
+ * whatever language the owner is most at home in.
+ */
+const ICON_EMOJI: Record<string, string> = {
+  bakery_dining: '🍞',
+  local_drink: '🥛',
+  local_bar: '🥤',
+  egg: '🥚',
+  grain: '🌾',
+  kitchen: '🧂',
+  lunch_dining: '🥪',
+  fastfood: '🍟',
+  cookie: '🍬',
+  set_meal: '🍽️',
+  skillet: '🍳',
+  water_drop: '💧',
+  sell: '🏷️',
+}
+const FAMILY_EMOJI: Record<Family, string> = { bread: '🍞', airtime: '📱', colddrink: '🥤' }
+
+/** A menu group's picture from its name: "Kota" 🥪, "Burgers" 🍔, anything else 🍽️. */
+function menuEmoji(name: string) {
+  const n = name.toLowerCase()
+  if (n.includes('kota') || n.includes('sandwich')) return '🥪'
+  if (n.includes('burger')) return '🍔'
+  if (n.includes('chip')) return '🍟'
+  if (n.includes('pap') || n.includes('plate') || n.includes('meal')) return '🍲'
+  return '🍽️'
+}
+
+export function tileEmoji(t: Tile): string {
+  if (t.kind === 'quick') return '🔢'
+  if (t.kind === 'group') return t.family ? FAMILY_EMOJI[t.family] : menuEmoji(t.menu ?? t.label)
+  return ICON_EMOJI[t.product.icon] ?? '📦'
+}
+
+// ---------------------------------------------------------------------------
+// Receipt
+// ---------------------------------------------------------------------------
+
+/**
+ * A plain-text receipt for sharing (WhatsApp, SMS). Plain text on purpose:
+ * it arrives readable in any chat app, with no attachment to open.
+ */
+export function receiptText(r: {
+  shop: string
+  /** When the sale was made; now, if not given. */
+  at?: number
+  lines: DraftLine[]
+  products: Map<string, Product>
+  total: number
+  payment: PaymentMethod
+  cashGiven?: number
+}): string {
+  const d = new Date(r.at ?? Date.now())
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const when = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const out = [r.shop, when, '']
+  for (const l of r.lines) out.push(`${l.qty}× ${shortName(r.products.get(l.productId), l.price, l.label)}  ${money(l.qty * l.price)}`)
+  out.push('', `Total  ${money(r.total)}`, `Paid by ${r.payment}`)
+  if (r.payment === 'Cash' && r.cashGiven != null) {
+    const change = Math.round((r.cashGiven - r.total) * 100) / 100
+    out.push(`Cash  ${money(r.cashGiven)}`)
+    if (change > 0) out.push(`Change  ${money(change)}`)
+  }
+  out.push('', 'Thank you!')
+  return out.join('\n')
 }

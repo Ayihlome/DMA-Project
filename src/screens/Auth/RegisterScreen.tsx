@@ -123,7 +123,7 @@ export default function RegisterScreen() {
           accessibilityLabel="Agree to the privacy notice"
         />
         <Text style={styles.consentText}>
-          I agree that StockMate may store my shop&apos;s stock and sales data to run the app.{' '}
+          I agree that StockEvo may store my shop&apos;s stock and sales data to run the app.{' '}
           <Link href="/privacy">
             <Text style={styles.consentLink}>Read the privacy notice</Text>
           </Link>

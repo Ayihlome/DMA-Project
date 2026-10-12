@@ -1,4 +1,4 @@
--- Analysis queries for the StockMate evaluation.
+-- Analysis queries for the StockEvo evaluation.
 --
 -- Run these in the Supabase SQL editor. Each one reads public.telemetry_events,
 -- which the app writes through the client (see src/lib/telemetry.ts). RLS limits

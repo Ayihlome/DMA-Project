@@ -1,5 +1,6 @@
-import SupplyScreen from '@/screens/Supply/SupplyScreen'
+import PricesScreen from '@/screens/Prices/PricesScreen';
 
-export default function SupplyRoute() {
-  return <SupplyScreen />
+// The route keeps its original name so existing links still work; it's the Prices tab.
+export default function PricesRoute() {
+  return <PricesScreen />;
 }
