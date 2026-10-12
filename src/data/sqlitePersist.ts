@@ -88,6 +88,15 @@ export async function persistReceive(uc: UseCases, lines: { productId: string; q
   return errors
 }
 
+   /** Stock taken back out (Undo on a restock). May go below zero, like a sale can. */
+export async function persistUndoStock(uc: UseCases, lines: { productId: string; qty: number }[]) {
+  const errors: string[] = []
+  for (const l of lines) {
+    errors.push(...failed(await uc.adjustStock({ productID: l.productId, delta: -l.qty, reason: 'restock_undo' }), 'adjustStock'))
+  }
+  return errors
+}
+
 /**
  * Everything else: whatever differs between `prev` and `next` is written through createProduct,
  * updateProduct, setRecipeComponents and saveSupplierPrice.
@@ -204,7 +213,8 @@ export function emptyShop(now = Date.now()): AppState {
  * The fields no use case stores yet. They live on the phone (AsyncStorage) until the
  * settings and order use cases exist, and are laid over what loadShop returns.
  */
-export type Overlay = Pick<AppState, 'purchases' | 'preferred' | 'budget' | 'profile' | 'onboardedAt' | 'sellGrid'>
+
+export type Overlay = Pick<AppState, 'purchases' | 'preferred' | 'budget' | 'profile' | 'onboardedAt' | 'sellGrid' | 'restockDay'>
 
 export const overlayOf = (s: AppState): Overlay => ({
   purchases: s.purchases,
@@ -213,6 +223,7 @@ export const overlayOf = (s: AppState): Overlay => ({
   profile: s.profile,
   onboardedAt: s.onboardedAt,
   ...(s.sellGrid ? { sellGrid: s.sellGrid } : {}),
+  ...(s.restockDay !== undefined ? { restockDay: s.restockDay } : {}),
 })
 
 export function withOverlay(shop: AppState, overlay: Overlay | null, now = Date.now()): AppState {
@@ -228,5 +239,6 @@ export function withOverlay(shop: AppState, overlay: Overlay | null, now = Date.
     profile: overlay.profile,
     onboardedAt: overlay.onboardedAt ?? null,
     ...(overlay.sellGrid ? { sellGrid: overlay.sellGrid } : {}),
+    ...(overlay.restockDay !== undefined ? { restockDay: overlay.restockDay } : {}),
   }
 }

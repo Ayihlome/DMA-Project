@@ -24,7 +24,7 @@ import type { AppState } from './types'
 import type { BackupStatus } from '../lib/cloudBackup'
 import { StoreContext } from '../store'
 import { useCases } from '../backend/useCases/container'
-import { demoShop, emptyShop, newId, overlayOf, persistChange, persistReceive, persistSale, uuidify, withOverlay, type Overlay } from './sqlitePersist'
+import { demoShop, emptyShop, newId, persistUndoStock, overlayOf, persistChange, persistReceive, persistSale, uuidify, withOverlay, type Overlay } from './sqlitePersist'
 const overlayKey = (ownerId: string) => `stockevo-sqlite-overlay:${ownerId}`
 const SYNC_EVERY_MS = 60_000
 
@@ -195,7 +195,7 @@ export function SqliteStoreProvider({
     const api: Pick<
       A.StoreApi,
       | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'createOrderList'
-      | 'receivePurchase' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
+               | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
       | 'setBudget' | 'updateProfile' | 'finishOnboarding' | 'skipOnboarding' | 'setStockCounts' | 'resetDemoData'
     > = {
       recordSale: (lines, meta) => {
@@ -226,7 +226,13 @@ export function SqliteStoreProvider({
         change((s) => A.upsertProduct(s, product))
         return product
       },
-      setStockCounts: (counts) => change((s) => A.setStockCounts(s, counts)),
+      setStockCounts: (counts) => {
+          commit(A.setStockCounts(cur(), counts))
+          enqueue(async () => {
+            const r = await useCases.setStockCounts({ counts })
+            return r.success ? [] : (r.errors ?? ['setStockCounts failed'])
+          })
+          },
       upsertSupplierPrice: (input) => change((s) => A.upsertSupplierPrice(s, input)),
 
       finishOnboarding: (sel, profile, counts) =>
@@ -256,6 +262,24 @@ export function SqliteStoreProvider({
         commit(next)
         enqueue(() => persistReceive(useCases, order.lines))
       },
+      // "Bought it": the purchases are recorded on the phone, the stock goes in through receiveStock
+      receiveRestock: (lines) => {
+        const clean = lines.filter((l) => l.qty > 0)
+        if (!clean.length) return []
+        const created = A.planOrders(cur(), clean)
+        commit(A.receivePlanned(cur(), created))
+        enqueue(() => persistReceive(useCases, clean))
+        return created.map((po) => po.id)
+      },
+      // Undo takes the stock back out; the trip's lines say how much, and the count may end up below zero
+      undoRestock: (ids) => {
+        const undone = cur().purchases.filter((p) => ids.includes(p.id) && p.status === 'delivered')
+        const next = A.undoRestock(cur(), ids)
+        if (!undone.length || next === cur()) return
+        commit(next)
+        enqueue(() => persistUndoStock(useCases, undone.flatMap((p) => p.lines)))
+      },
+      setRestockDay: (day) => local((s) => A.setRestockDay(s, day)),
       cancelPurchase: (id) => local((s) => A.cancelPurchase(s, id)),
 
       setPreferredSupplier: (productId, supplierId) => local((s) => A.setPreferredSupplier(s, productId, supplierId)),

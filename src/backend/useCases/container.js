@@ -47,6 +47,8 @@ import { createGetRecipeUseCase } from "./getRecipe";
 import { createGetDashboardSummaryUseCase } from "./getDashboardSummary";
 import { createLoadShopUseCase } from "./loadShop";
 import { createClaimDeviceUseCase } from "./claimDevice";
+import { createSetStockCountsUseCase } from "./setStockCounts";
+import { createAdjustStockUseCase } from "./adjustStock";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -99,6 +101,11 @@ const rawUseCases = {
   previewSaleDeductions: createPreviewSaleDeductionUseCase({
     recipeEngine,
     productRepository,
+  }),
+  adjustStock: createAdjustStockUseCase({ stockRepository }),
+  setStockCounts: createSetStockCountsUseCase({
+    productRepository,
+    stockRepository,
   }),
   createProduct: createCreateProductUseCase({ productRepository }),
   createSupplier,
