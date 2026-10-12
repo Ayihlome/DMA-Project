@@ -38,6 +38,7 @@ export default function SignInScreen() {
       switchText="New here?"
       switchLabel="Create an account"
       switchHref="/register"
+      segment="sign-in"
     >
       {error && <Text style={styles.error}>{error}</Text>}
       <Field

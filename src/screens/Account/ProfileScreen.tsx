@@ -1,5 +1,6 @@
 import React, { useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, Alert, ActivityIndicator, StyleSheet } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, Alert, StyleSheet } from 'react-native'
+import Skeleton from '../../components/ui/Skeleton'
 import { router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -179,7 +180,7 @@ export default function ProfileScreen() {
             <TouchableOpacity onPress={exportReport} disabled={exporting} style={styles.listRow}>
               <MaterialIcons name="picture_as_pdf" size={20} color={colors.primary} />
               <Text style={styles.listLabel}>{exporting ? 'Preparing report…' : 'Export a PDF report'}</Text>
-              {exporting ? <ActivityIndicator size="small" color={colors.primary} /> : <MaterialIcons name="chevron_right" size={18} color={colors.textSecondary} />}
+              {exporting ? <Skeleton width={28} height={10} radius={5} /> : <MaterialIcons name="chevron_right" size={18} color={colors.textSecondary} />}
             </TouchableOpacity>
           )}
 
@@ -198,7 +199,7 @@ export default function ProfileScreen() {
           </Text>
           <TouchableOpacity onPress={askDelete} disabled={deleting} style={[styles.btn, styles.btnDanger]}>
             {deleting
-              ? <ActivityIndicator size="small" color={colors.onPrimary} />
+              ? <Skeleton width={18} height={18} radius={9} tone="dark" />
               : <MaterialIcons name="delete_forever" size={18} color={colors.onPrimary} />}
             <Text style={styles.btnDangerText}>{deleting ? 'Deleting…' : 'Delete my account'}</Text>
           </TouchableOpacity>

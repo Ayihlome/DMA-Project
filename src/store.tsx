@@ -64,12 +64,14 @@ export function StoreProvider({
       // State left by a different account must never be adopted by this one.
       const mine = savedOwner === null || savedOwner === ownerId
       if (A.isValidState(saved) && mine) {
-        setState(saved)
+        // Saved before onboarding existed? Decide once, here, rather than
+        // sending a shop that is already running through setup again.
+        setState(A.migrateState(saved))
         setPhotos(savedPhotos ?? {})
       } else {
         const restored = await fetchBackup()
         if (!alive) return
-        setState(restored ?? createSeedState())
+        setState(restored ? A.migrateState(restored) : createSeedState())
         // Photos are device-only, so there is nothing to restore for another account
         setPhotos(mine ? (savedPhotos ?? {}) : {})
         if (!mine) AsyncStorage.removeItem(A.PHOTO_KEY).catch(() => {})
@@ -119,9 +121,9 @@ export function StoreProvider({
   const update = useCallback((fn: (s: AppState) => AppState) => setState((s) => s && fn(s)), [])
 
   const recordSale = useCallback<StoreApi['recordSale']>(
-    (lines) => {
-      const check = A.recordSale(ref.current!, lines)
-      if (check.ok) update((s) => A.recordSale(s, lines).state ?? s)
+    (lines, meta) => {
+      const check = A.recordSale(ref.current!, lines, meta)
+      if (check.ok) update((s) => A.recordSale(s, lines, meta).state ?? s)
       return { ok: check.ok, message: check.message } as A.Result
     },
     [update],
@@ -184,6 +186,24 @@ export function StoreProvider({
         setPreferredSupplier: (productId, supplierId) => update((s) => A.setPreferredSupplier(s, productId, supplierId)),
         setBudget: (n) => update((s) => A.setBudget(s, n)),
         updateProfile: (p) => update((s) => A.updateProfile(s, p)),
+        finishOnboarding: (sel, profile, counts) => update((s) => A.applyStarterPacks(s, sel, profile, counts)),
+        skipOnboarding: (profile) => update((s) => A.skipOnboarding(s, profile)),
+        setStockCounts: (counts) => update((s) => A.setStockCounts(s, counts)),
+        updateSellGrid: (patch) => update((s) => A.updateSellGrid(s, patch)),
+        // Same pattern as addProduct: build once (so the caller gets the exact
+        // product back), then commit with a functional update so two calls in
+        // one tap can't overwrite each other
+        saveMenuItem: (input, id) => {
+          const product = A.buildMenuItem(ref.current!, input, id)
+          update((s) => A.upsertProduct(s, product))
+          return product
+        },
+        removeMenuItem: (id) => update((s) => A.removeMenuItem(s, id)),
+        addIngredient: (input) => {
+          const product = A.buildIngredient(input)
+          update((s) => A.upsertProduct(s, product))
+          return product
+        },
         setPhoto,
         removePhoto,
         resetDemoData: () => setState(createSeedState()),
@@ -201,4 +221,14 @@ export function useStore() {
   const ctx = useContext(StoreContext)
   if (!ctx) throw new Error('useStore must be used inside <StoreProvider>')
   return ctx
+}
+
+/**
+ * The store if there is one, null if nobody is signed in.
+ *
+ * Only the root navigator needs this: it renders on both sides of the auth
+ * guard, and signed out there is deliberately no store to read.
+ */
+export function useStoreOptional() {
+  return useContext(StoreContext)
 }

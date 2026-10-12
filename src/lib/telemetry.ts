@@ -11,7 +11,16 @@
  */
 import AsyncStorage from '@react-native-async-storage/async-storage'
 
-export type TelemetryType = 'sale_started' | 'sale_confirmed' | 'deduction_check'
+export type TelemetryType =
+  | 'sale_started'
+  | 'sale_confirmed'
+  | 'deduction_check'
+  /** Onboarding opened. One per account, unless they close the app part-way. */
+  | 'onboarding_started'
+  /** Finished: carries how long it took, what was picked and whether they counted stock. */
+  | 'onboarding_completed'
+  /** Left for the sample data instead. */
+  | 'onboarding_skipped'
 
 type BufferedEvent = {
   type: TelemetryType
@@ -68,6 +77,19 @@ export function newSaleId() {
  */
 export function trackSaleConfirmed(startedAt: number | null, data: Record<string, unknown>) {
   track('sale_confirmed', { ...data, duration_ms: startedAt === null ? null : Date.now() - startedAt })
+}
+
+/**
+ * How long setup took and what came out of it — the measure of whether the
+ * starter packs actually spare anyone the typing. Clock reads live here for the
+ * same reason as above.
+ */
+export function trackOnboarding(
+  type: 'onboarding_completed' | 'onboarding_skipped',
+  startedAt: number | null,
+  data: Record<string, unknown> = {},
+) {
+  track(type, { ...data, duration_ms: startedAt === null ? null : Date.now() - startedAt })
 }
 
 async function enqueue(type: TelemetryType, data: Record<string, unknown>) {

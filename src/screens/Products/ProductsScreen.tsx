@@ -23,9 +23,12 @@ function statusText(state: Parameters<typeof available>[0], p: Product) {
 export default function ProductsScreen() {
   const insets = useSafeAreaInsets()
   const { state } = useStore()
-  const products = [...state.products]
-    .filter(p => p.sellable)
-    .sort((a, b) => a.name.localeCompare(b.name))
+  // Ingredients are listed too. They are not sold, but their cost is what a
+  // kota's margin is worked out from, and the starter catalogue creates them —
+  // so hiding them here would leave numbers in the app that nothing can edit.
+  const products = [...state.products].sort(
+    (a, b) => Number(a.sellable) - Number(b.sellable) || a.name.localeCompare(b.name),
+  )
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
@@ -57,7 +60,9 @@ export default function ProductsScreen() {
                   <View style={styles.rowText}>
                     <Text style={styles.rowName} numberOfLines={1}>{p.name}</Text>
                     <Text style={styles.rowMeta} numberOfLines={1}>
-                      {p.unit} · {rand(p.price)}
+                      {/* An ingredient has no selling price, so showing R0,00
+                          would be a lie; its cost is the number that matters. */}
+                      {p.sellable ? `${p.unit} · ${rand(p.price)}` : `${p.unit} · ${rand(p.cost)} cost · ingredient`}
                     </Text>
                   </View>
                   <Text style={[styles.rowStatus, s.warn && styles.rowWarn]}>{s.text}</Text>

@@ -54,7 +54,10 @@ export default function ProductEditScreen() {
         price: priceVal,
         stock: isComposite ? 0 : stockVal,
         unit: unit.trim(),
-        unitPlural: unit.trim(),
+        // Only the singular is editable here, so an untouched unit keeps the
+        // plural it came with — otherwise saving a starter product once turns
+        // "loaves" into "loaf" everywhere it is shown.
+        unitPlural: existing && existing.unit === unit.trim() ? existing.unitPlural : unit.trim(),
         packSize: isNaN(packVal) || packVal <= 0 ? 1 : packVal,
       }
       if (isNew) addProduct(input)
