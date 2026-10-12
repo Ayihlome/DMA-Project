@@ -148,7 +148,8 @@ export default function ProfileScreen() {
       >
         <View>
           <ListRow title="Edit profile" detail="Your name and shop name" onPress={() => setEditOpen(true)} />
-          <ListRow title="Products & prices" detail="What you sell and what it costs" onPress={() => router.push('/products')} />
+          <ListRow title="What you sell" detail="Products and their selling prices" onPress={() => router.push('/products')} />
+          <ListRow title="Menu" detail="Food you make and its ingredients" onPress={() => router.push('/menu')} />
           <ListRow title="Edit sell grid" detail="Move and hide tiles on Sell" onPress={() => router.navigate('/sales?edit=1')} />
           <ListRow
             title="Shopping day"

@@ -43,18 +43,21 @@ export default function HomeScreen() {
             </PressableScale>
           </View>
 
-          <View
+          {/* Tap the money to see (and void) today's sales — where you'd look if the number seems wrong */}
+          <PressableScale
+            onPress={() => router.push('/sales-today')}
+            containerStyle={styles.moneyHit}
             style={styles.money}
-            accessibilityLabel={`${money(summary.total)} today. ${salesLine(summary.count)}.${summary.vsYesterday ? ` ${summary.vsYesterday.replace(/^[▲▼] /, '')}.` : ''}`}
+            accessibilityLabel={`${money(summary.total)} today. ${salesLine(summary.count)}.${summary.vsYesterday ? ` ${summary.vsYesterday.replace(/^[▲▼] /, '')}.` : ''} Shows today's sales.`}
           >
             {/* Rolling digits can't shrink-to-fit like plain text, so a big day steps the size down */}
             <RollingNumber
               value={money(summary.total)}
               style={[styles.total, money(summary.total).length > 9 && styles.totalLong]}
             />
-            <Text style={styles.count}>{salesLine(summary.count)}</Text>
+            <Text style={styles.count}>{`${salesLine(summary.count)}  ›`}</Text>
             {summary.vsYesterday ? <Text style={styles.compare}>{summary.vsYesterday}</Text> : null}
-          </View>
+          </PressableScale>
         </View>
       }
     >
@@ -78,8 +81,7 @@ export default function HomeScreen() {
           <ListRow title="Nothing running low" onPress={() => router.navigate('/restock')} />
         )}
 
-        {/* The receive-stock flow is next to build; Restock is where stock is added until then */}
-        <ListRow title="Stock came in" onPress={() => router.navigate('/restock')} />
+        <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
 
         <ListRow
           title="Count stock"
@@ -105,6 +107,7 @@ const styles = StyleSheet.create({
     justifyContent: 'center',
   },
   avatarText: { fontFamily: fonts.extrabold, fontSize: 18, color: colors.brand },
+  moneyHit: { alignSelf: 'flex-start' },
   money: { gap: 4 },
   total: { fontFamily: fonts.extrabold, fontSize: 52, lineHeight: 60, letterSpacing: -1.6, color: colors.ink },
   totalLong: { fontSize: 40, lineHeight: 48, letterSpacing: -1.2 },

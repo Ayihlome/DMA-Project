@@ -9,7 +9,7 @@ import { useStore } from '../../store'
 import { stockItems } from '../../data/inventory'
 import type { Product, RecipeLine } from '../../data/types'
 import { colors, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
-import { menuNames } from './sellModel'
+import { menuNames } from '../Sell/sellModel'
 
 /** What the editor is opened for: a new item in a group, or an existing item. */
 export type MenuEdit = { group: string; product?: Product }

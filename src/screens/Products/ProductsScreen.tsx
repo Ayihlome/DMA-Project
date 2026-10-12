@@ -1,4 +1,4 @@
-import React, { useMemo } from 'react'
+import React, { useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
@@ -8,6 +8,7 @@ import { useStore } from '../../store'
 import { unitQty } from '../../data/inventory'
 import type { Product } from '../../data/types'
 import { colors, fonts, money, space, type } from '../../theme/tokens'
+import MenuItemSheet, { type MenuEdit } from '../Menu/MenuItemSheet'
 
 const SIDE = 28
 
@@ -41,7 +42,11 @@ export default function ProductsScreen() {
     }
   }, [state.products])
 
+  const [menuEdit, setMenuEdit] = useState<MenuEdit | null>(null)
+
   const open = (id: string) => router.push({ pathname: '/products/[id]', params: { id } })
+  /** Food opens its ingredients editor here, instead of sending the owner off to Sell. */
+  const openRow = (p: Product) => (p.composite ? setMenuEdit({ group: p.menu ?? '', product: p }) : open(p.id))
 
   const section = (title: string, list: Product[]) =>
     list.length ? (
@@ -50,7 +55,7 @@ export default function ProductsScreen() {
           {title}
         </Text>
         {list.map((p, i) => (
-          <ListRow key={p.id} title={p.name} detail={detailFor(p)} onPress={() => open(p.id)} last={i === list.length - 1} />
+          <ListRow key={p.id} title={p.name} detail={detailFor(p)} onPress={() => openRow(p)} last={i === list.length - 1} />
         ))}
       </View>
     ) : null
@@ -68,6 +73,8 @@ export default function ProductsScreen() {
       <View style={[styles.bar, { paddingBottom: insets.bottom + space.lg }]}>
         <PrimaryButton label="Add a product" onPress={() => open('new')} />
       </View>
+
+      <MenuItemSheet edit={menuEdit} onSaved={() => {}} onClose={() => setMenuEdit(null)} />
     </View>
   )
 }

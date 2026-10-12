@@ -57,6 +57,8 @@ export type StoreApi = {
   undoRestock: (purchaseIds: string[]) => void
   /** The day the owner goes shopping, 0 = Sunday … 6 = Saturday. */
   setRestockDay: (day: number) => void
+  /** Takes a recorded sale back and returns its stock. */
+  voidSale: (saleId: string) => void
   cancelPurchase: (id: string) => void
   addProduct: (input: ProductInput) => Product
   updateProduct: (id: string, input: ProductInput) => void
@@ -266,6 +268,38 @@ export function undoRestock(s: AppState, purchaseIds: string[]): AppState {
     },
     'stock',
     'update',
+  )
+}
+
+/**
+ * Void: takes a recorded sale back — a wrong item, a double charge. Puts back
+ * the stock it took (using today's recipes) and the "sold without a recipe"
+ * count it added, and moves the sale to `voidedSales`.
+ */
+export function voidSale(s: AppState, saleId: string, now = Date.now()): AppState {
+  const sale = s.sales.find((x) => x.id === saleId)
+  if (!sale) return s
+  const giveBack = deductionsFor(s, sale.lines)
+  const unrecipied = new Map<string, number>()
+  for (const l of sale.lines) {
+    const p = productById(s, l.productId)
+    if (p?.composite && !p.recipe?.length) unrecipied.set(p.id, (unrecipied.get(p.id) ?? 0) + l.qty)
+  }
+  return queued(
+    {
+      ...s,
+      products: s.products.map((p) => {
+        let out = p
+        if (giveBack.has(p.id)) out = { ...out, stock: Math.round((p.stock + giveBack.get(p.id)!) * 1000) / 1000 }
+        if (unrecipied.has(p.id)) out = { ...out, soldWithoutRecipe: Math.max(0, (p.soldWithoutRecipe ?? 0) - unrecipied.get(p.id)!) }
+        return out
+      }),
+      sales: s.sales.filter((x) => x.id !== saleId),
+      voidedSales: [...(s.voidedSales ?? []), { ...sale, voidedAt: now }],
+    },
+    'sale',
+    'update',
+    now,
   )
 }
 

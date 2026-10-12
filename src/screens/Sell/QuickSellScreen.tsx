@@ -6,6 +6,7 @@ import * as Haptics from 'expo-haptics'
 import { router, useLocalSearchParams } from 'expo-router'
 import { useTabBarSpace } from '../../components/nav/TabBar'
 import ActionToast, { type Toast } from '../../components/ui/ActionToast'
+import PressableScale from '../../components/ui/PressableScale'
 import { useStore } from '../../store'
 import { DEFAULT_SELL_GRID } from '../../data/actions'
 import { QUICK_AMOUNT_ID, type PaymentMethod, type Product } from '../../data/types'
@@ -13,7 +14,7 @@ import { colors, fonts, money, radius, space, type } from '../../theme/tokens'
 import { EditGrid, EditPanel } from './EditGrid'
 import GroupSheet from './GroupSheet'
 import KeypadSheet from './KeypadSheet'
-import MenuItemSheet, { type MenuEdit } from './MenuItemSheet'
+import MenuItemSheet, { type MenuEdit } from '../Menu/MenuItemSheet'
 import MultiplierRow from './MultiplierRow'
 import PaySheet from './PaySheet'
 import SalePanel from './SalePanel'
@@ -32,7 +33,6 @@ import {
   shortName,
   tileIdFor,
   tileName,
-  tileEmoji,
   tileQty,
   tileSales,
   type AddItem,
@@ -144,6 +144,8 @@ export default function QuickSellScreen() {
       return t.kind === 'group' && t.members.some((m) => `${m.name} ${m.variant ?? ''}`.toLowerCase().includes(q))
     })
   }, [ordered, query])
+
+  const hasMenu = allTiles.some((t) => t.kind === 'group' && !!t.menu)
 
   // Floored: three fractional widths plus two gaps can round past the row and
   // wrap the third tile onto its own line
@@ -382,7 +384,6 @@ export default function QuickSellScreen() {
               <View key={t.id} style={{ width: cell }}>
                 <SellTile
                   tile={t}
-                  emoji={tileEmoji(t)}
                   title={tileName(t)}
                   subtitle={subtitleFor(t)}
                   qty={tileQty(t, active, store.state.products)}
@@ -392,6 +393,24 @@ export default function QuickSellScreen() {
                 />
               </View>
             ))}
+          {/* A shop with no food yet has no food tile to find "+ Add" in — this is the way in.
+              It goes once the first item exists; after that the group's own tile carries "+". */}
+          {cell > 0 && !hasMenu && !query.trim() ? (
+            <View style={{ width: cell }}>
+              <PressableScale
+                onPress={() => setMenuEdit({ group: '' })}
+                accessibilityLabel="Add food you make, like kotas or burgers"
+                style={styles.addFood}
+              >
+                <Text style={styles.addFoodTitle} numberOfLines={2}>
+                  + Add food you make
+                </Text>
+                <Text style={styles.addFoodSub} numberOfLines={1}>
+                  Kotas, burgers…
+                </Text>
+              </PressableScale>
+            </View>
+          ) : null}
         </View>
         {query.trim() && tiles.length === 0 ? (
           <Text style={styles.noResults}>{`Nothing matches "${query.trim()}".`}</Text>
@@ -511,6 +530,19 @@ const styles = StyleSheet.create({
   },
   toastText: { fontFamily: fonts.semibold, fontSize: 14, lineHeight: 19, color: colors.surface },
   editHint: { ...type.caption, color: colors.muted, paddingVertical: space.sm },
+  // Same shape as a tile (82 tall, radius 16), dashed so it reads as "add", not a product
+  addFood: {
+    height: 82,
+    borderRadius: 16,
+    borderWidth: 1.5,
+    borderStyle: 'dashed',
+    borderColor: '#9C9C94',
+    paddingHorizontal: 10,
+    paddingVertical: 10,
+    justifyContent: 'space-between',
+  },
+  addFoodTitle: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, color: colors.ink },
+  addFoodSub: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, color: colors.muted },
   tip: {
     flexDirection: 'row',
     alignItems: 'center',
