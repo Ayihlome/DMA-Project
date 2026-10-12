@@ -18,6 +18,7 @@ import StockRepository from "../Repositories/StockRepo";
 import SupplierPriceRepository from "../Repositories/SupplierPriceRepository";
 import SupplierRepository from "../Repositories/SupplierRepository";
 import ShopReadRepository from "../Repositories/ShopReadRepo";
+import DeviceRepository from "../Repositories/DeviceRepo";
 
 //Engines
 import KPICalculator from "../engines/KPICalculator";
@@ -25,7 +26,7 @@ import RecipeEngine from "../engines/RecipeEngine";
 import RestockEngine from "../engines/RestockEngine";
 
 //Use cases
-import { createGetDashboardKpiUseCase } from "./DashboardKPIs";
+import { createGetDashboardKpiUseCase } from "./dashboardKPIs";
 import { createRecordSaleUseCase } from "./recordSale";
 import { createGenerateRestockPlanUseCase } from "./generateRestockPlan";
 
@@ -45,6 +46,7 @@ import { createUpdateProductUseCase } from "./updateProduct";
 import { createGetRecipeUseCase } from "./getRecipe";
 import { createGetDashboardSummaryUseCase } from "./getDashboardSummary";
 import { createLoadShopUseCase } from "./loadShop";
+import { createClaimDeviceUseCase } from "./claimDevice";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -55,6 +57,7 @@ const kpiSnapshotRepository = new KPISnapshotRepo();
 const supplierPriceRepository = new SupplierPriceRepository();
 const supplierRepository = new SupplierRepository();
 const shopReadRepository = new ShopReadRepository();
+const deviceRepository = new DeviceRepository();
 
 const recipeEngine = new RecipeEngine(recipeRepository, stockRepository);
 const restockEngine = new RestockEngine(
@@ -132,6 +135,7 @@ const rawUseCases = {
     createSupplier,
     setSupplierPrice,
   }),
+  claimDevice: createClaimDeviceUseCase({ deviceRepository }),
   // { retryFailed: true } first gives rows that were parked as failed another go.
   syncNow: async (input) => {
     if (input?.retryFailed) await retryFailedSync();
