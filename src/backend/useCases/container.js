@@ -19,6 +19,7 @@ import SupplierPriceRepository from "../Repositories/SupplierPriceRepository";
 import SupplierRepository from "../Repositories/SupplierRepository";
 import ShopReadRepository from "../Repositories/ShopReadRepo";
 import DeviceRepository from "../Repositories/DeviceRepo";
+import DeviceSettingsRepository from "../Repositories/DeviceSettingsRepo";
 
 //Engines
 import KPICalculator from "../engines/KPICalculator";
@@ -49,6 +50,8 @@ import { createLoadShopUseCase } from "./loadShop";
 import { createClaimDeviceUseCase } from "./claimDevice";
 import { createSetStockCountsUseCase } from "./setStockCounts";
 import { createAdjustStockUseCase } from "./adjustStock";
+import { createSetPreferredSupplier } from "./setPreferredSupplier"
+import { createSetStockCounts } from "./setStockCounts"
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -60,6 +63,7 @@ const supplierPriceRepository = new SupplierPriceRepository();
 const supplierRepository = new SupplierRepository();
 const shopReadRepository = new ShopReadRepository();
 const deviceRepository = new DeviceRepository();
+const deviceSettingsRepository = new DeviceSettingsRepository();
 
 const recipeEngine = new RecipeEngine(recipeRepository, stockRepository);
 const restockEngine = new RestockEngine(
@@ -141,6 +145,13 @@ const rawUseCases = {
     supplierRepository,
     createSupplier,
     setSupplierPrice,
+  }),
+  setPreferredSupplier: createSetPreferredSupplierUseCase({
+    deviceSettingsRepository
+  }),
+  setStockCounts: createSetStockCountsUseCase ({
+    productRepository,
+    stockRepository,
   }),
   claimDevice: createClaimDeviceUseCase({ deviceRepository }),
   // { retryFailed: true } first gives rows that were parked as failed another go.
