@@ -8,17 +8,17 @@ import AnimatedSplash from '@/components/AnimatedSplash';
 import AuthSkeleton from '@/screens/Auth/AuthSkeleton';
 import { AuthProvider, useAuth } from '@/providers/AuthProvider';
 import { StoreProvider, useStoreOptional } from '@/store';
-import { colors } from '@/theme/theme';
 import { useAppFonts } from '@/theme/fonts';
-import { colors as brand } from '@/theme/tokens';
+import { colors as brand, fonts } from '@/theme/tokens';
 
 // Pages opened on top of the tabs get a header with a back button
 const pageHeader = {
   headerShown: true,
-  headerStyle: { backgroundColor: colors.bgBase },
-  headerTintColor: colors.primary,
-  headerTitleStyle: { color: colors.textPrimary },
+  headerStyle: { backgroundColor: brand.surface },
+  headerTintColor: brand.ink,
+  headerTitleStyle: { color: brand.ink, fontFamily: fonts.bold, fontSize: 17 },
   headerShadowVisible: false,
+  headerBackButtonDisplayMode: 'minimal' as const,
 };
 /**
  * Cross-fade for the sign-in / create-account pair. 220ms: long enough to read

@@ -247,13 +247,13 @@ otp_expiry = 3600
 # The verify screen asks for a code, so the email must contain {{ .Token }}.
 # The live project needs the same template: Dashboard -> Authentication -> Emails -> Confirm signup.
 [auth.email.template.confirmation]
-subject = "Your StockMate verification code"
+subject = "Your StockEvo verification code"
 content_path = "./supabase/templates/confirmation.html"
 
 # Same for "Forgot password": the reset screen asks for a code.
 # Live project: Dashboard -> Authentication -> Emails -> Reset password.
 [auth.email.template.recovery]
-subject = "Your StockMate password reset code"
+subject = "Your StockEvo password reset code"
 content_path = "./supabase/templates/recovery.html"
 
 # Uncomment to customize email template

@@ -43,13 +43,17 @@ export default function HomeScreen() {
             </PressableScale>
           </View>
 
-          <View style={styles.money} accessibilityLabel={`${money(summary.total)} today. ${salesLine(summary.count)}`}>
+          <View
+            style={styles.money}
+            accessibilityLabel={`${money(summary.total)} today. ${salesLine(summary.count)}.${summary.vsYesterday ? ` ${summary.vsYesterday.replace(/^[▲▼] /, '')}.` : ''}`}
+          >
             {/* Rolling digits can't shrink-to-fit like plain text, so a big day steps the size down */}
             <RollingNumber
               value={money(summary.total)}
               style={[styles.total, money(summary.total).length > 9 && styles.totalLong]}
             />
             <Text style={styles.count}>{salesLine(summary.count)}</Text>
+            {summary.vsYesterday ? <Text style={styles.compare}>{summary.vsYesterday}</Text> : null}
           </View>
         </View>
       }
@@ -106,6 +110,7 @@ const styles = StyleSheet.create({
   totalLong: { fontSize: 40, lineHeight: 48, letterSpacing: -1.2 },
   // Ink at 70% rather than a grey: grey on yellow looks dirty
   count: { fontFamily: fonts.semibold, fontSize: 16, color: 'rgba(17,17,17,0.7)' },
+  compare: { fontFamily: fonts.medium, fontSize: 14, color: 'rgba(17,17,17,0.7)', marginTop: 2 },
   rows: { marginTop: space.lg },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
 })

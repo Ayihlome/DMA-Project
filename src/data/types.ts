@@ -177,6 +177,8 @@ export type AppState = {
   onboardedAt?: number | null
   /** Absent on shops saved before the Sell grid existed; treated as defaults. */
   sellGrid?: SellGridSettings
+  /** Day the owner goes shopping, 0 = Sunday … 6 = Saturday. Absent = Thursday. */
+  restockDay?: number
 }
 
 export const CATEGORIES: { key: CategoryKey; label: string; icon: string }[] = [

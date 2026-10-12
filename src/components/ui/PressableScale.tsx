@@ -33,7 +33,7 @@ export default function PressableScale({
   children: ReactNode
   accessibilityLabel?: string
   accessibilityRole?: 'button' | 'checkbox' | 'tab' | 'link'
-  accessibilityState?: { checked?: boolean; selected?: boolean; disabled?: boolean }
+  accessibilityState?: { checked?: boolean; selected?: boolean; disabled?: boolean; expanded?: boolean }
   hitSlop?: number
 }) {
   const [pressed, setPressed] = useState(false)

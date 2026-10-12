@@ -24,6 +24,7 @@ export const HOLD_MS = 450
  */
 export default function SellTile({
   tile,
+  emoji,
   title,
   subtitle,
   qty,
@@ -32,6 +33,8 @@ export default function SellTile({
   onHoldEnd,
 }: {
   tile: Tile
+  /** The picture — recognised before the name is read. */
+  emoji: string
   title: string
   subtitle: string
   /** Badge: how many of this tile (or family) are in the sale. */
@@ -71,7 +74,10 @@ export default function SellTile({
       style={styles.hit}
     >
       <Animated.View style={[motion.tile, styles.tile, quick && styles.quick, pressed && motion.pressed]}>
-        <Text style={styles.title} numberOfLines={2}>
+        <Text style={styles.emoji} maxFontSizeMultiplier={1.15} accessibilityElementsHidden importantForAccessibility="no">
+          {emoji}
+        </Text>
+        <Text style={styles.title} numberOfLines={1}>
           {title}
         </Text>
         <Text style={[styles.subtitle, quick && styles.subtitleQuick]} numberOfLines={1}>
@@ -112,11 +118,13 @@ const styles = StyleSheet.create({
     borderColor: '#E6E6E1',
     backgroundColor: colors.surface,
     paddingHorizontal: 10,
-    paddingVertical: 10,
+    paddingVertical: 8,
     justifyContent: 'space-between',
   },
   // Dashed and yellow-soft: the one tile that isn't a product
   quick: { borderStyle: 'dashed', borderColor: '#D9B75A', backgroundColor: colors.brandSoft },
+  // Capped growth (maxFontSizeMultiplier) so large text can't push the tile past 82px
+  emoji: { fontSize: 20, lineHeight: 24 },
   title: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, color: colors.ink, paddingRight: 18 },
   subtitle: { fontFamily: fonts.medium, fontSize: 12, lineHeight: 16, color: colors.muted, ...tabular },
   subtitleQuick: { color: '#8A6A00' },
