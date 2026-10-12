@@ -32,7 +32,6 @@ import {
   shortName,
   tileIdFor,
   tileName,
-  tileEmoji,
   tileQty,
   tileSales,
   type AddItem,
@@ -382,7 +381,6 @@ export default function QuickSellScreen() {
               <View key={t.id} style={{ width: cell }}>
                 <SellTile
                   tile={t}
-                  emoji={tileEmoji(t)}
                   title={tileName(t)}
                   subtitle={subtitleFor(t)}
                   qty={tileQty(t, active, store.state.products)}

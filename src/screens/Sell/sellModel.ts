@@ -299,49 +299,6 @@ export function cashOptions(total: number): { key: string; label: string; amount
 }
 
 // ---------------------------------------------------------------------------
-// Pictures on tiles
-// ---------------------------------------------------------------------------
-
-/**
- * Emoji rather than platform icons: they look the same on every phone, there's
- * no gap to fall into (iOS has no bread symbol at all — it was showing a
- * birthday cake), and a picture is recognised faster than a word is read,
- * whatever language the owner is most at home in.
- */
-const ICON_EMOJI: Record<string, string> = {
-  bakery_dining: '🍞',
-  local_drink: '🥛',
-  local_bar: '🥤',
-  egg: '🥚',
-  grain: '🌾',
-  kitchen: '🧂',
-  lunch_dining: '🥪',
-  fastfood: '🍟',
-  cookie: '🍬',
-  set_meal: '🍽️',
-  skillet: '🍳',
-  water_drop: '💧',
-  sell: '🏷️',
-}
-const FAMILY_EMOJI: Record<Family, string> = { bread: '🍞', airtime: '📱', colddrink: '🥤' }
-
-/** A menu group's picture from its name: "Kota" 🥪, "Burgers" 🍔, anything else 🍽️. */
-function menuEmoji(name: string) {
-  const n = name.toLowerCase()
-  if (n.includes('kota') || n.includes('sandwich')) return '🥪'
-  if (n.includes('burger')) return '🍔'
-  if (n.includes('chip')) return '🍟'
-  if (n.includes('pap') || n.includes('plate') || n.includes('meal')) return '🍲'
-  return '🍽️'
-}
-
-export function tileEmoji(t: Tile): string {
-  if (t.kind === 'quick') return '🔢'
-  if (t.kind === 'group') return t.family ? FAMILY_EMOJI[t.family] : menuEmoji(t.menu ?? t.label)
-  return ICON_EMOJI[t.product.icon] ?? '📦'
-}
-
-// ---------------------------------------------------------------------------
 // Receipt
 // ---------------------------------------------------------------------------
 

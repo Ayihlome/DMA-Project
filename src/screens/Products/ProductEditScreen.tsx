@@ -25,7 +25,7 @@ const packNameOf = (label: string) => label.match(/^([a-z]+) of \d/i)?.[1] ?? ''
  * counts, sales and restocks — only new products get an opening stock.
  *
  * Made-to-order food isn't created here: it needs ingredients to deduct stock,
- * and those are set from Sell (tap the food group's tile, then +/✏️).
+ * and those are set from Sell (tap the food group's tile, then + or the pencil).
  */
 export default function ProductEditScreen() {
   const { id = 'new' } = useLocalSearchParams<{ id: string }>()
