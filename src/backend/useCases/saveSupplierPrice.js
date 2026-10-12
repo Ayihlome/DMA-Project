@@ -7,6 +7,7 @@
  *   {
  *     productID: string,
  *     supplierName: string,
+ *      location?: string,        // only used when the supplier is new
  *     unitPrice: number,        // per unit, not per pack
  *     minimumOrder?: number,
  *   }
@@ -35,7 +36,10 @@ export function createSaveSupplierPriceUseCase({
 
     let supplier = existing;
     if (!supplier) {
-      const created = await createSupplier({ name });
+      const created = await createSupplier({
+        name,
+        location: input.location,
+      });
       if (!created.success) return created;
       supplier = created.supplier;
     }

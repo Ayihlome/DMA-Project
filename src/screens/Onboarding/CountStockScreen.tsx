@@ -89,7 +89,7 @@ export default function CountStockScreen() {
 }
 
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.page },
+  screen: { flex: 1, backgroundColor: colors.surface },
   scroll: { padding: space.lg, gap: space.md },
   title: { ...type.titleSm, color: colors.ink },
   subtitle: { ...type.caption, color: colors.muted, marginBottom: space.xs },

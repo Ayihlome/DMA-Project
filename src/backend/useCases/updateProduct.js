@@ -10,6 +10,8 @@
  *     category?: string,
  *     packSize?: number,
  *     stockOnHand?: number,   // sets the stock count; ignored for made-to-order products
+ *     meta?: object,          // replaces the v2-only fields (see createProduct)
+ *     soldWithoutRecipe?: number, // phone-only counter; a stock count sets it back to 0
  *   }
  *
  * Output (success): { success: true }
@@ -48,6 +50,23 @@ export function createUpdateProductUseCase({
     ) {
       return { success: false, errors: ["stockOnHand cannot be negative"] };
     }
+    if (
+      input.meta !== undefined &&
+      (input.meta === null || typeof input.meta !== "object")
+    ) {
+      return { success: false, errors: ["meta must be an object"] };
+    }
+    if (
+      input.soldWithoutRecipe !== undefined &&
+      !(
+        Number.isFinite(input.soldWithoutRecipe) && input.soldWithoutRecipe >= 0
+      )
+    ) {
+      return {
+        success: false,
+        errors: ["soldWithoutRecipe cannot be negative"],
+      };
+    }
 
     const product = await productRepository.getByID(input.productID);
     if (!product) {
@@ -61,10 +80,17 @@ export function createUpdateProductUseCase({
       changes.selling_price = input.sellingPrice;
     if (input.category !== undefined) changes.category = input.category;
     if (input.packSize !== undefined) changes.pack_size = input.packSize;
+    if (input.meta !== undefined) changes.meta = input.meta;
 
     try {
       if (Object.keys(changes).length > 0) {
         await productRepository.update(input.productID, changes);
+      }
+      if (input.soldWithoutRecipe !== undefined) {
+        await productRepository.setSoldWithoutRecipe(
+          input.productID,
+          input.soldWithoutRecipe,
+        );
       }
       if (input.stockOnHand !== undefined && !product.is_composite) {
         await stockRepository.setOpeningStock(

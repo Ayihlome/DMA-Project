@@ -1,3 +1,4 @@
+const LEVELS = { debug: 0, info: 1, warn: 2, error: 3 };
 const fallback = typeof __DEV__ !== "undefined" && __DEV__ ? "info" : "warn";
 const currentLevel =
   LEVELS[

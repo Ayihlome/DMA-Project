@@ -7,6 +7,7 @@ import {
   FAMILIES,
   QUICK_AMOUNT_ID,
   type Family,
+  type PaymentMethod,
   type Product,
   type Sale,
   type SellGridSettings,
@@ -295,4 +296,37 @@ export function cashOptions(total: number): { key: string; label: string; amount
     if (up > total) out.push({ key: `up-${up}`, label: money(up, { whole: true }), amount: up })
   }
   return out
+}
+
+// ---------------------------------------------------------------------------
+// Receipt
+// ---------------------------------------------------------------------------
+
+/**
+ * A plain-text receipt for sharing (WhatsApp, SMS). Plain text on purpose:
+ * it arrives readable in any chat app, with no attachment to open.
+ */
+export function receiptText(r: {
+  shop: string
+  /** When the sale was made; now, if not given. */
+  at?: number
+  lines: DraftLine[]
+  products: Map<string, Product>
+  total: number
+  payment: PaymentMethod
+  cashGiven?: number
+}): string {
+  const d = new Date(r.at ?? Date.now())
+  const pad = (n: number) => String(n).padStart(2, '0')
+  const when = `${pad(d.getDate())}/${pad(d.getMonth() + 1)}/${d.getFullYear()} ${pad(d.getHours())}:${pad(d.getMinutes())}`
+  const out = [r.shop, when, '']
+  for (const l of r.lines) out.push(`${l.qty}× ${shortName(r.products.get(l.productId), l.price, l.label)}  ${money(l.qty * l.price)}`)
+  out.push('', `Total  ${money(r.total)}`, `Paid by ${r.payment}`)
+  if (r.payment === 'Cash' && r.cashGiven != null) {
+    const change = Math.round((r.cashGiven - r.total) * 100) / 100
+    out.push(`Cash  ${money(r.cashGiven)}`)
+    if (change > 0) out.push(`Change  ${money(change)}`)
+  }
+  out.push('', 'Thank you!')
+  return out.join('\n')
 }

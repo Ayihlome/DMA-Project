@@ -95,6 +95,14 @@ class ProductRepository {
 
     await enqueueSync("products", productID, "update", changes);
   }
+
+  // Phone-only counter (it has no column on Supabase), so nothing is queued.
+  async setSoldWithoutRecipe(productID, count) {
+    await db.execute(
+      `update products set sold_without_recipe = ? where id = ?`,
+      [count, productID],
+    );
+  }
 }
 
 export default ProductRepository;

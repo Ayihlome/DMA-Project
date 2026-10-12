@@ -177,7 +177,18 @@ export type AppState = {
   onboardedAt?: number | null
   /** Absent on shops saved before the Sell grid existed; treated as defaults. */
   sellGrid?: SellGridSettings
+  /** Day the owner goes shopping, 0 = Sunday … 6 = Saturday. Absent = Thursday. */
+  restockDay?: number
+  /**
+   * Sales taken back with Void. Moved out of `sales` rather than flagged in
+   * place, so every total, best-seller order and restock suggestion simply
+   * stops counting them — nothing that reads `sales` has to know about voids.
+   * Kept here so there's a record of what was voided and when.
+   */
+  voidedSales?: VoidedSale[]
 }
+
+export type VoidedSale = Sale & { voidedAt: number }
 
 export const CATEGORIES: { key: CategoryKey; label: string; icon: string }[] = [
   { key: 'bakery', label: 'Bakery', icon: 'bakery_dining' },

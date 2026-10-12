@@ -102,6 +102,7 @@ function EditTile({
         <TileButton
           onTap={first ? undefined : () => onMove(-1)}
           style={[styles.arrow, first && styles.arrowOff]}
+          containerStyle={styles.arrowSpot}
           label={`Move ${name} earlier`}
           disabled={first}
         >
@@ -110,6 +111,7 @@ function EditTile({
         <TileButton
           onTap={last ? undefined : () => onMove(1)}
           style={[styles.arrow, last && styles.arrowOff]}
+          containerStyle={styles.arrowSpot}
           label={`Move ${name} later`}
           disabled={last}
         >
@@ -233,7 +235,9 @@ const styles = StyleSheet.create({
     justifyContent: 'space-between',
   },
   title: { fontFamily: fonts.bold, fontSize: 14, lineHeight: 18, color: colors.ink, paddingRight: 24 },
-  hideSpot: { position: 'absolute', top: 6, right: 6 },
+  // 24px visual, 44px touch: the padding is the extra target, pulled back out
+  // with the offset so the × still sits 6px from the corner
+  hideSpot: { position: 'absolute', top: -4, right: -4, padding: 10 },
   hide: {
     width: 24,
     height: 24,
@@ -242,7 +246,9 @@ const styles = StyleSheet.create({
     alignItems: 'center',
     justifyContent: 'center',
   },
-  arrows: { flexDirection: 'row', justifyContent: 'space-between' },
+  // Same trick for ◀ ▶: 32×26 visuals inside 44×44 touch areas
+  arrows: { flexDirection: 'row', justifyContent: 'space-between', marginHorizontal: -6, marginBottom: -9 },
+  arrowSpot: { padding: 6, paddingVertical: 9 },
   arrow: {
     width: 32,
     height: 26,

@@ -1,54 +1,86 @@
-import React, { useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Platform, Alert, StyleSheet } from 'react-native'
-import Skeleton from '../../components/ui/Skeleton'
+import React, { useMemo, useState } from 'react'
+import { Alert, Platform, StyleSheet, Text, View } from 'react-native'
+import Animated, { FadeIn, FadeOut } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import AsyncStorage from '@react-native-async-storage/async-storage'
-import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import MaterialIcons from '../../components/common/MaterialIcon'
-import AppHeader from '../../components/common/AppHeader'
-import { colors, spacing, radius, type } from '../../theme/theme'
+import YellowHeaderScreen from '../../components/layout/YellowHeaderScreen'
+import BottomSheet from '../../components/ui/BottomSheet'
+import FilledInput from '../../components/ui/FilledInput'
+import ListRow from '../../components/ui/ListRow'
+import PressableScale from '../../components/ui/PressableScale'
+import PrimaryButton from '../../components/ui/PrimaryButton'
+import Skeleton from '../../components/ui/Skeleton'
 import { useStore } from '../../store'
-import { useAuth } from '../../providers/AuthProvider'
+import { useAuth, type AuthState } from '../../providers/AuthProvider'
 import { supabase } from '../../lib/supabase'
-import { actions, dashboardKpis, longDate, rand, relativeTime } from '../../core'
+import { actions, relativeTime } from '../../core'
+import { pricesFor } from '../../data/inventory'
+import * as Haptics from 'expo-haptics'
+import { DAY_NAMES, restockDayName, restockDayOf } from '../Restock/restockModel'
 import { QUEUE_KEY } from '../../lib/telemetry'
+import { colors, fonts, radius, space, type } from '../../theme/tokens'
 
-/** Alert's buttons do nothing on web, so confirmation falls back to window.confirm. */
-function confirm(title: string, message: string, confirmLabel: string, onConfirm: () => void) {
-  if (Platform.OS === 'web') {
-    if (window.confirm(`${title}\n\n${message}`)) onConfirm()
-    return
-  }
-  Alert.alert(title, message, [
-    { text: 'Cancel', style: 'cancel' },
-    { text: confirmLabel, style: 'destructive', onPress: onConfirm },
-  ])
-}
+/** Spec: same yellow-header pattern as Home. */
+const HEADER = 250
 
+const CONFIRM_IN = FadeIn.duration(200)
+const CONFIRM_OUT = FadeOut.duration(160)
+
+/** Alert's buttons do nothing on web, so messages fall back to window.alert. */
 function notify(title: string, message: string) {
   if (Platform.OS === 'web') window.alert(`${title}\n\n${message}`)
   else Alert.alert(title, message)
 }
 
+async function signOutOrExplain(signOut: AuthState['signOut']) {
+  const { error } = await signOut()
+  // Sign-out needs the internet to end the session on the server
+  if (error) notify('Sign out failed', `Couldn't sign out: ${error.message}. Check your connection and try again.`)
+}
+
+function confirmSignOut(signOut: AuthState['signOut']) {
+  if (Platform.OS === 'web') {
+    if (window.confirm('Sign out of StockEvo?')) void signOutOrExplain(signOut)
+    return
+  }
+  Alert.alert('Sign out', 'Sign out of StockEvo?', [
+    { text: 'Cancel', style: 'cancel' },
+    { text: 'Sign out', style: 'destructive', onPress: () => void signOutOrExplain(signOut) },
+  ])
+}
+
+/**
+ * Profile: who you are, the shop's settings as plain rows, sign out, and
+ * account deletion behind an inline confirm.
+ *
+ * The backup line under the shop name only says "Backed up" once an upload has
+ * actually succeeded — it never claims a sync that didn't happen.
+ */
 export default function ProfileScreen() {
-  const insets = useSafeAreaInsets()
   const store = useStore()
   const { signOut } = useAuth()
   const { state } = store
 
-  const [editing, setEditing] = useState(false)
-  const [ownerName, setOwnerName] = useState(state.profile.ownerName)
-  const [storeName, setStoreName] = useState(state.profile.storeName)
+  const [editOpen, setEditOpen] = useState(false)
+  const [suppliersOpen, setSuppliersOpen] = useState(false)
+  const [dayOpen, setDayOpen] = useState(false)
+  const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
 
-  const kpis = dashboardKpis(state)
+  const initial = (state.profile.ownerName.trim()[0] ?? '?').toUpperCase()
   const backedUp = store.backupStatus === 'backed-up'
 
-  function saveProfile() {
-    store.updateProfile({ ownerName: ownerName.trim() || state.profile.ownerName, storeName: storeName.trim() || state.profile.storeName })
-    setEditing(false)
-  }
+  const backupLine = backedUp
+    ? `Backed up ${relativeTime(state.lastSyncedAt)}`
+    : !store.online
+      ? 'Offline · saved on this phone'
+      : store.backupStatus === 'pushing'
+        ? 'Backing up…'
+        : store.backupStatus === 'error'
+          ? 'Backup failed · tap to try again'
+          : 'Saved on this phone · tap to back up'
+  const canBackUp = !backedUp && store.online && store.backupStatus !== 'pushing'
 
   async function exportReport() {
     setExporting(true)
@@ -65,15 +97,6 @@ export default function ProfileScreen() {
     } finally {
       setExporting(false)
     }
-  }
-
-  function askDelete() {
-    confirm(
-      'Delete my account',
-      'This removes your account and every product, sale and supplier price belonging to it, on this device and in the cloud. It cannot be undone.',
-      'Delete',
-      () => void deleteAccount(),
-    )
   }
 
   async function deleteAccount() {
@@ -96,185 +119,287 @@ export default function ProfileScreen() {
   }
 
   return (
-    <View style={styles.screen}>
-      <AppHeader screenLabel="Profile" />
-      <ScrollView
-        contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 96 }]}
-        showsVerticalScrollIndicator={false}
-        keyboardShouldPersistTaps="handled"
+    <>
+      <YellowHeaderScreen
+        headerHeight={HEADER}
+        header={
+          <View style={styles.header}>
+            <View style={styles.avatar} accessibilityElementsHidden>
+              <Text style={styles.avatarText}>{initial}</Text>
+            </View>
+            <Text style={styles.name} accessibilityRole="header" numberOfLines={1}>
+              {state.profile.ownerName}
+            </Text>
+            <Text style={styles.shop} numberOfLines={1}>
+              {state.profile.storeName}
+            </Text>
+            <PressableScale
+              onPress={store.backUpNow}
+              disabled={!canBackUp}
+              accessibilityLabel={backupLine}
+              style={styles.backup}
+              hitSlop={8}
+            >
+              <View style={[styles.backupDot, backedUp && styles.backupDotOn]} />
+              <Text style={styles.backupText}>{backupLine}</Text>
+            </PressableScale>
+          </View>
+        }
       >
-        <View style={styles.card}>
-          {editing ? (
-            <>
-              <Text style={styles.inputLabel}>Your name</Text>
-              <TextInput style={styles.input} value={ownerName} onChangeText={setOwnerName} placeholder="Your name" placeholderTextColor={colors.textSecondary} />
-              <Text style={styles.inputLabel}>Shop name</Text>
-              <TextInput style={styles.input} value={storeName} onChangeText={setStoreName} placeholder="Shop name" placeholderTextColor={colors.textSecondary} />
-              <View style={styles.editRow}>
-                <TouchableOpacity onPress={() => { setOwnerName(state.profile.ownerName); setStoreName(state.profile.storeName); setEditing(false) }} style={[styles.btn, styles.btnGhost]}>
-                  <Text style={styles.btnGhostText}>Cancel</Text>
-                </TouchableOpacity>
-                <TouchableOpacity onPress={saveProfile} style={[styles.btn, styles.btnPrimary]}>
-                  <Text style={styles.btnPrimaryText}>Save</Text>
-                </TouchableOpacity>
-              </View>
-            </>
-          ) : (
-            <>
-              <Text style={styles.name}>{state.profile.ownerName}</Text>
-              <Text style={styles.meta}>{state.profile.role} · {state.profile.storeName}</Text>
-              <Text style={styles.meta}>Member since {longDate(state.profile.memberSince)}</Text>
-              {/* "Backed up" appears only once an upload has actually succeeded */}
-              <View style={styles.storageRow}>
-                <MaterialIcons
-                  name={backedUp ? 'cloud_done' : store.online ? 'save' : 'cloud_off'}
-                  size={16}
-                  color={backedUp ? colors.secondary : colors.textSecondary}
-                />
-                <Text style={styles.storageText}>
-                  {backedUp
-                    ? `Backed up ${relativeTime(state.lastSyncedAt)}`
-                    : store.online
-                      ? 'Saved on this device'
-                      : 'Offline · saved on this device'}
-                </Text>
-              </View>
-              {!backedUp && store.online && (
-                <TouchableOpacity onPress={store.backUpNow} disabled={store.backupStatus === 'pushing'} style={styles.backupLink}>
-                  <Text style={styles.backupLinkText}>
-                    {store.backupStatus === 'pushing'
-                      ? 'Backing up…'
-                      : store.backupStatus === 'error'
-                        ? 'Backup failed · try again'
-                        : 'Back up now'}
-                  </Text>
-                </TouchableOpacity>
-              )}
-              <TouchableOpacity onPress={() => setEditing(true)} style={[styles.btn, styles.btnGhost, { marginTop: spacing.sm }]}>
-                <MaterialIcons name="edit" size={18} color={colors.primary} />
-                <Text style={styles.btnGhostText}>Edit profile</Text>
-              </TouchableOpacity>
-            </>
-          )}
-        </View>
-
-        <View style={styles.statRow}>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Stock value</Text>
-            <Text style={styles.statValue}>{rand(kpis.stockValue)}</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Items tracked</Text>
-            <Text style={styles.statValue}>{kpis.itemCount}</Text>
-          </View>
-          <View style={styles.stat}>
-            <Text style={styles.statLabel}>Need attention</Text>
-            <Text style={styles.statValue}>{kpis.attention.length}</Text>
-          </View>
-        </View>
-
-        <Text style={styles.sectionTitle}>Your data</Text>
-        <View style={styles.card}>
+        <View>
+          <ListRow title="Edit profile" detail="Your name and shop name" onPress={() => setEditOpen(true)} />
+          <ListRow title="What you sell" detail="Products and their selling prices" onPress={() => router.push('/products')} />
+          <ListRow title="Menu" detail="Food you make and its ingredients" onPress={() => router.push('/menu')} />
+          <ListRow title="Edit sell grid" detail="Move and hide tiles on Sell" onPress={() => router.navigate('/sales?edit=1')} />
+          <ListRow
+            title="Shopping day"
+            detail={`${restockDayName(state)} · Restock plans for this day`}
+            onPress={() => setDayOpen(true)}
+          />
+          <ListRow
+            title="Suppliers"
+            detail={`${state.suppliers.length} saved`}
+            onPress={() => setSuppliersOpen(true)}
+          />
           {/* expo-print and expo-sharing have no web implementation */}
-          {Platform.OS !== 'web' && (
-            <TouchableOpacity onPress={exportReport} disabled={exporting} style={styles.listRow}>
-              <MaterialIcons name="picture_as_pdf" size={20} color={colors.primary} />
-              <Text style={styles.listLabel}>{exporting ? 'Preparing report…' : 'Export a PDF report'}</Text>
-              {exporting ? <Skeleton width={28} height={10} radius={5} /> : <MaterialIcons name="chevron_right" size={18} color={colors.textSecondary} />}
-            </TouchableOpacity>
-          )}
-
-          <TouchableOpacity onPress={() => router.push('/privacy')} style={styles.listRow}>
-            <MaterialIcons name="shield" size={20} color={colors.primary} />
-            <Text style={styles.listLabel}>Privacy notice</Text>
-            <MaterialIcons name="chevron_right" size={18} color={colors.textSecondary} />
-          </TouchableOpacity>
+          {Platform.OS !== 'web' ? (
+            <ListRow
+              title="Export a report"
+              detail={exporting ? 'Preparing your report…' : 'Stock and sales as a PDF'}
+              onPress={exporting ? undefined : exportReport}
+              trailing={exporting ? <Skeleton width={28} height={10} radius={5} /> : undefined}
+            />
+          ) : null}
+          <ListRow title="Privacy notice" onPress={() => router.push('/privacy')} last />
         </View>
 
-        <Text style={styles.sectionTitle}>Danger zone</Text>
-        <View style={[styles.card, styles.dangerCard]}>
-          <Text style={styles.dangerText}>
-            Deleting your account removes it permanently, with every product, sale and supplier price
-            belonging to it. This cannot be undone.
-          </Text>
-          <TouchableOpacity onPress={askDelete} disabled={deleting} style={[styles.btn, styles.btnDanger]}>
-            {deleting
-              ? <Skeleton width={18} height={18} radius={9} tone="dark" />
-              : <MaterialIcons name="delete_forever" size={18} color={colors.onPrimary} />}
-            <Text style={styles.btnDangerText}>{deleting ? 'Deleting…' : 'Delete my account'}</Text>
-          </TouchableOpacity>
-        </View>
-      </ScrollView>
+        <PressableScale
+          onPress={() => confirmSignOut(signOut)}
+          accessibilityLabel="Sign out"
+          style={styles.signOut}
+        >
+          <Text style={styles.signOutText}>Sign out</Text>
+        </PressableScale>
+
+        {confirmDelete ? (
+          <Animated.View entering={CONFIRM_IN} exiting={CONFIRM_OUT} style={styles.confirm}>
+            <Text style={styles.confirmTitle}>Delete your account?</Text>
+            <Text style={styles.confirmText}>
+              {"Every product, sale and supplier price goes with it, on this phone and in the cloud. This can't be undone."}
+            </Text>
+            <View style={styles.confirmRow}>
+              <PressableScale
+                onPress={() => setConfirmDelete(false)}
+                disabled={deleting}
+                accessibilityLabel="Keep my account"
+                containerStyle={styles.flex}
+                style={styles.keep}
+              >
+                <Text style={styles.keepText}>Keep it</Text>
+              </PressableScale>
+              <PressableScale
+                onPress={() => void deleteAccount()}
+                disabled={deleting}
+                accessibilityLabel="Delete my account"
+                accessibilityState={{ disabled: deleting }}
+                containerStyle={styles.flex}
+                style={styles.delete}
+              >
+                {deleting ? (
+                  <Skeleton width="40%" height={12} radius={6} tone="dark" />
+                ) : (
+                  <Text style={styles.deleteText}>Delete</Text>
+                )}
+              </PressableScale>
+            </View>
+          </Animated.View>
+        ) : (
+          <PressableScale
+            onPress={() => setConfirmDelete(true)}
+            accessibilityLabel="Delete account"
+            style={styles.deleteLink}
+          >
+            <Text style={styles.deleteLinkText}>Delete account</Text>
+          </PressableScale>
+        )}
+      </YellowHeaderScreen>
+
+      <EditProfileSheet visible={editOpen} onClose={() => setEditOpen(false)} />
+      <SuppliersSheet visible={suppliersOpen} onClose={() => setSuppliersOpen(false)} />
+      <ShoppingDaySheet visible={dayOpen} onClose={() => setDayOpen(false)} />
+    </>
+  )
+}
+
+function EditProfileSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const store = useStore()
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title="Edit profile" handleOnly>
+      {(finish) => (
+        <EditProfileForm
+          onSave={(p) => {
+            store.updateProfile(p)
+            finish()
+          }}
+        />
+      )}
+    </BottomSheet>
+  )
+}
+
+function EditProfileForm({ onSave }: { onSave: (p: { ownerName: string; storeName: string }) => void }) {
+  const { state } = useStore()
+  const [ownerName, setOwnerName] = useState(state.profile.ownerName)
+  const [storeName, setStoreName] = useState(state.profile.storeName)
+  const canSave = ownerName.trim().length > 0 && storeName.trim().length > 0
+
+  return (
+    <View style={styles.form}>
+      <FilledInput label="Your name" value={ownerName} onChangeText={setOwnerName} autoCapitalize="words" autoComplete="name" />
+      <FilledInput label="Shop name" value={storeName} onChangeText={setStoreName} autoCapitalize="words" />
+      <PrimaryButton
+        label="Save"
+        disabled={!canSave}
+        onPress={() => onSave({ ownerName: ownerName.trim(), storeName: storeName.trim() })}
+      />
     </View>
   )
 }
 
+/** Monday first — how a shop week reads — though the app counts from Sunday. */
+const WEEK = [1, 2, 3, 4, 5, 6, 0]
+
+/** Which day the owner goes shopping. Restock plans each list to last until the next one. */
+function ShoppingDaySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const store = useStore()
+  const current = restockDayOf(store.state)
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title="Shopping day">
+      {(finish) => (
+        <View style={styles.form}>
+          <Text style={styles.sheetLead}>Which day do you usually buy stock? Restock makes your list for that day.</Text>
+          <View style={styles.days}>
+            {WEEK.map((d) => {
+              const on = d === current
+              return (
+                <View key={d} style={styles.dayCell}>
+                  <PressableScale
+                    onPress={() => {
+                      Haptics.selectionAsync()
+                      store.setRestockDay(d)
+                      finish()
+                    }}
+                    accessibilityRole="button"
+                    accessibilityState={{ selected: on }}
+                    accessibilityLabel={DAY_NAMES[d]}
+                    style={[styles.day, on && styles.dayOn]}
+                  >
+                    <Text style={styles.dayText}>{DAY_NAMES[d]}</Text>
+                  </PressableScale>
+                </View>
+              )
+            })}
+          </View>
+        </View>
+      )}
+    </BottomSheet>
+  )
+}
+
+/**
+ * Who the shop buys from, and how many items each one is cheapest for. Read
+ * only for now — suppliers are added by typing a new name when adding a price.
+ */
+function SuppliersSheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
+  const { state } = useStore()
+  const rows = useMemo(() => {
+    const cheapestFor = new Map<string, number>()
+    for (const p of state.products) {
+      const best = pricesFor(state, p.id)[0]
+      if (best) cheapestFor.set(best.supplierId, (cheapestFor.get(best.supplierId) ?? 0) + 1)
+    }
+    return [...state.suppliers]
+      .sort((a, b) => a.name.localeCompare(b.name))
+      .map((s) => {
+        const n = cheapestFor.get(s.id) ?? 0
+        const where = [s.location, s.contact].filter(Boolean).join(' · ')
+        return { s, detail: [`Cheapest for ${n} item${n === 1 ? '' : 's'}`, where].filter(Boolean).join(' · ') }
+      })
+  }, [state])
+
+  return (
+    <BottomSheet visible={visible} onClose={onClose} title="Suppliers">
+      <View>
+        {rows.map((r, i) => (
+          <ListRow key={r.s.id} title={r.s.name} detail={r.detail} last={i === rows.length - 1} />
+        ))}
+        <Text style={styles.sheetHint}>
+          {rows.length
+            ? 'To add one, save a buying price on the Prices tab and type their name.'
+            : "No suppliers yet. They're added when you save a buying price on the Prices tab."}
+        </Text>
+      </View>
+    </BottomSheet>
+  )
+}
+
 const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bgBase },
-  scroll: { paddingHorizontal: spacing.md, paddingTop: spacing.sm, gap: spacing.sm },
-
-  card: {
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    borderRadius: radius.md,
-    padding: spacing.md,
-    gap: spacing.xs2,
-  },
-  name: { ...type.h2, color: colors.textPrimary },
-  meta: { ...type.caption, color: colors.textSecondary },
-  storageRow: { flexDirection: 'row', alignItems: 'center', gap: 6, marginTop: spacing.xs2 },
-  storageText: { ...type.captionMedium, color: colors.textSecondary },
-  backupLink: { minHeight: 32, justifyContent: 'center' },
-  backupLinkText: { ...type.captionMedium, color: colors.primary, fontWeight: '700' },
-
-  statRow: { flexDirection: 'row', gap: spacing.sm },
-  stat: {
-    flex: 1,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    borderRadius: radius.md,
-    padding: spacing.sm,
-    gap: 2,
-  },
-  statLabel: { ...type.caption, color: colors.textSecondary },
-  statValue: { ...type.bodyMedium, color: colors.textPrimary, fontWeight: '700' },
-
-  sectionTitle: { ...type.captionMedium, color: colors.textSecondary, marginTop: spacing.sm },
-
-  listRow: { flexDirection: 'row', alignItems: 'center', gap: spacing.sm, minHeight: 48 },
-  listLabel: { ...type.body, color: colors.textPrimary, flex: 1 },
-
-  inputLabel: { ...type.captionMedium, color: colors.textSecondary },
-  input: {
-    ...type.body,
-    color: colors.textPrimary,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    minHeight: 48,
-  },
-  editRow: { flexDirection: 'row', gap: spacing.sm, marginTop: spacing.xs },
-
-  btn: {
-    flexDirection: 'row',
+  flex: { flex: 1 },
+  header: { flex: 1, justifyContent: 'flex-end', paddingBottom: 40, gap: 2 },
+  avatar: {
+    width: 64,
+    height: 64,
+    borderRadius: radius.pill,
+    backgroundColor: colors.ink,
     alignItems: 'center',
     justifyContent: 'center',
-    gap: spacing.xs,
-    borderRadius: radius.md,
-    minHeight: 48,
-    paddingHorizontal: spacing.md,
-    flex: 1,
+    marginBottom: space.md,
   },
-  btnPrimary: { backgroundColor: colors.primary },
-  btnPrimaryText: { ...type.bodyMedium, color: colors.onPrimary, fontWeight: '700' },
-  btnGhost: { borderWidth: 1, borderColor: colors.borderDefault },
-  btnGhostText: { ...type.bodyMedium, color: colors.primary, fontWeight: '700' },
+  avatarText: { fontFamily: fonts.extrabold, fontSize: 26, color: colors.brand },
+  name: { fontFamily: fonts.extrabold, fontSize: 26, lineHeight: 32, letterSpacing: -0.5, color: colors.ink },
+  // Ink at 70% rather than a grey: grey on yellow looks dirty
+  shop: { fontFamily: fonts.semibold, fontSize: 16, color: 'rgba(17,17,17,0.7)' },
+  backup: { flexDirection: 'row', alignItems: 'center', gap: 6, alignSelf: 'flex-start', marginTop: space.sm },
+  backupDot: { width: 7, height: 7, borderRadius: 4, backgroundColor: 'rgba(17,17,17,0.35)' },
+  backupDotOn: { backgroundColor: colors.success },
+  backupText: { fontFamily: fonts.medium, fontSize: 13, color: 'rgba(17,17,17,0.7)' },
 
-  dangerCard: { borderColor: colors.errorDefault },
-  dangerText: { ...type.caption, color: colors.textSecondary, lineHeight: 18 },
-  btnDanger: { backgroundColor: colors.errorDefault, marginTop: spacing.xs },
-  btnDangerText: { ...type.bodyMedium, color: colors.onPrimary, fontWeight: '700' },
+  signOut: {
+    marginTop: space.xl,
+    height: 58,
+    borderRadius: radius.md,
+    borderWidth: 1.5,
+    borderColor: colors.ink,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  signOutText: { ...type.button, color: colors.ink },
+
+  deleteLink: { alignSelf: 'center', paddingVertical: space.lg, marginTop: space.sm },
+  deleteLinkText: { fontFamily: fonts.semibold, fontSize: 14, color: colors.danger },
+  confirm: { marginTop: space.lg, gap: space.md, padding: space.lg, borderRadius: radius.md, backgroundColor: '#FDECEA' },
+  confirmTitle: { ...type.bodyStrong, color: colors.ink },
+  confirmText: { ...type.caption, color: colors.ink },
+  confirmRow: { flexDirection: 'row', gap: space.sm },
+  keep: { height: 48, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  keepText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  delete: { height: 48, borderRadius: radius.md, backgroundColor: colors.danger, alignItems: 'center', justifyContent: 'center' },
+  deleteText: { fontFamily: fonts.bold, fontSize: 15, color: colors.surface },
+
+  form: { gap: space.lg },
+  sheetLead: { ...type.body, color: colors.ink },
+  days: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space.xs },
+  dayCell: { width: '50%', padding: space.xs },
+  day: {
+    height: 52,
+    borderRadius: radius.md,
+    borderWidth: 2,
+    borderColor: 'transparent',
+    backgroundColor: colors.field,
+    alignItems: 'center',
+    justifyContent: 'center',
+  },
+  dayOn: { backgroundColor: colors.brandSoft, borderColor: colors.ink },
+  dayText: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
+  sheetHint: { ...type.caption, color: colors.quiet, paddingTop: space.md },
 })

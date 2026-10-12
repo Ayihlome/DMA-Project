@@ -1,4 +1,4 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { actions as A, createSeedState, type AppState, type StoreApi } from './core'
@@ -36,10 +36,17 @@ export function StoreProvider({
   const [photos, setPhotos] = useState<Record<string, string>>({})
   const [online, setOnline] = useState(true)
   const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle')
+  // The latest state for event handlers (recording a sale, saving a product),
+  // which run outside render. Updated after each commit rather than during
+  // render: writing a ref mid-render is unsafe once React can re-run renders,
+  // and a layout effect runs before anything can be tapped, so handlers never
+  // see a stale value.
   const ref = useRef(state)
-  ref.current = state
   const photosRef = useRef(photos)
-  photosRef.current = photos
+  useLayoutEffect(() => {
+    ref.current = state
+    photosRef.current = photos
+  }, [state, photos])
   // Hydration assigns state once; that assignment must not trigger an upload of
   // what was just downloaded.
   const skipNextPush = useRef(true)
@@ -182,6 +189,17 @@ export function StoreProvider({
         addProduct,
         updateProduct: (id, input) => update((s) => A.updateProduct(s, id, input)),
         receivePurchase: (id) => update((s) => A.receivePurchase(s, id)),
+        // Planned against the latest state (for the ids), committed functionally
+        receiveRestock: (lines) => {
+          const clean = lines.filter((l) => l.qty > 0)
+          if (!clean.length) return []
+          const created = A.planOrders(ref.current!, clean)
+          update((s) => A.receivePlanned(s, created))
+          return created.map((po) => po.id)
+        },
+        undoRestock: (ids) => update((s) => A.undoRestock(s, ids)),
+        setRestockDay: (day) => update((s) => A.setRestockDay(s, day)),
+        voidSale: (saleId) => update((s) => A.voidSale(s, saleId)),
         cancelPurchase: (id) => update((s) => A.cancelPurchase(s, id)),
         upsertSupplierPrice: (input) => update((s) => A.upsertSupplierPrice(s, input)),
         setPreferredSupplier: (productId, supplierId) => update((s) => A.setPreferredSupplier(s, productId, supplierId)),
@@ -214,7 +232,9 @@ export function StoreProvider({
 
   // Nobody is signed in: the auth screens need no store and must not be blocked
   if (!ownerId) return <>{children}</>
-  if (!value) return <>{fallback}</>
+  // `value` is `state && {…}`, so this is the same test — on the plain state,
+  // not on the object of handlers
+  if (!state) return <>{fallback}</>
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 
