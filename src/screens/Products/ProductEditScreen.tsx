@@ -90,7 +90,7 @@ export default function ProductEditScreen() {
         <FilledInput label="Product name, e.g. White bread" value={name} onChangeText={setName} autoCapitalize="words" />
         {madeToOrder ? (
           <Text style={styles.note}>
-            Made to order. Its ingredients are changed on Sell: tap its group tile, then the pencil on it.
+            Made to order. Change its ingredients from Profile → Menu, or tap it in the product list.
           </Text>
         ) : (
           <FilledInput

@@ -198,6 +198,7 @@ export function StoreProvider({
         },
         undoRestock: (ids) => update((s) => A.undoRestock(s, ids)),
         setRestockDay: (day) => update((s) => A.setRestockDay(s, day)),
+        voidSale: (saleId) => update((s) => A.voidSale(s, saleId)),
         cancelPurchase: (id) => update((s) => A.cancelPurchase(s, id)),
         upsertSupplierPrice: (input) => update((s) => A.upsertSupplierPrice(s, input)),
         setPreferredSupplier: (productId, supplierId) => update((s) => A.setPreferredSupplier(s, productId, supplierId)),
