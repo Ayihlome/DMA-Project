@@ -50,8 +50,9 @@ import { createLoadShopUseCase } from "./loadShop";
 import { createClaimDeviceUseCase } from "./claimDevice";
 import { createSetStockCountsUseCase } from "./setStockCounts";
 import { createAdjustStockUseCase } from "./adjustStock";
-import { createSetPreferredSupplier } from "./setPreferredSupplier"
-import { createSetStockCounts } from "./setStockCounts"
+import { createSetPreferredSupplierUseCase } from "./setPreferredSupplier";
+import { createSetStockCountsUseCase } from "./setStockCounts";
+import { createUpdateProfileUseCase } from "./updateProfile";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -152,6 +153,9 @@ const rawUseCases = {
   setStockCounts: createSetStockCountsUseCase ({
     productRepository,
     stockRepository,
+  }),
+  updateProfile: createUpdateProfileUseCase ({
+    deviceSettingsRepository
   }),
   claimDevice: createClaimDeviceUseCase({ deviceRepository }),
   // { retryFailed: true } first gives rows that were parked as failed another go.
