@@ -4,7 +4,8 @@ import NetInfo from '@react-native-community/netinfo'
 import { actions as A, createSeedState, type AppState, type StoreApi } from './core'
 import { fetchBackup, pushBackup, type BackupStatus } from './lib/cloudBackup'
 
-const StoreContext = createContext<StoreApi | null>(null)
+// Exported so a second store (src/data/sqliteStore.tsx) can feed the same useStore()
+export const StoreContext = createContext<StoreApi | null>(null)
 
 async function load<T>(key: string): Promise<T | null> {
   try {

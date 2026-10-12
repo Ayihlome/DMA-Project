@@ -84,8 +84,8 @@ export async function processSyncQueue() {
         (item.operation === "insert" && error.code === DUPLICATE_KEY)
       ) {
         await db.execute(
-          `update sync_queue set status = 'synced' where id = ?`,
-          [item.id],
+          `update sync_queue set status = 'synced', synced_at = ? where id = ?`,
+          [new Date().toISOString(), item.id],
         );
         continue;
       }

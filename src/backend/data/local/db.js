@@ -63,6 +63,8 @@ export async function runMigration() {
       selling_price real,
       category text, 
       pack_size real not null default 1,
+      meta text not null default '{}',
+        sold_without_recipe integer not null default 0,
       created_at text not null,
       updated_at text not null,
       is_deleted integer not null default 0
@@ -112,6 +114,8 @@ export async function runMigration() {
       owner_id text not null,
       "timestamp" text not null,
       total_amount real not null,
+      payment text,
+      cash_given real,
       sync_status text not null default 'pending',
       updated_at text not null
     );
@@ -121,7 +125,8 @@ export async function runMigration() {
     create table if not exists sale_line_items (
       id text primary key,
       sale_id text not null references sales(id),
-      product_id text not null references products(id),
+      product_id text references products(id),
+      label text,
       quantity_sold real not null,
       price_at_sale real not null,
       owner_id text not null,
@@ -197,6 +202,7 @@ export async function runMigration() {
   }
 
   await migrateSupplierTables();
+  await migrateV2Columns();
 
   // Small key/value store for things that belong to this phone (which account owns the data,
   // the restock budget, ...). These are never sent to Supabase.
@@ -329,4 +335,52 @@ async function migrateSupplierTables() {
     await tx.execute(`drop table supplier_prices_legacy`);
     await tx.execute(`drop table suppliers_legacy`);
   });
+}
+
+async function addColumnIfMissing(table, column, ddl) {
+  const { rows } = await db.execute(`pragma table_info(${table})`);
+  if (!rows.some((c) => c.name === column)) {
+    await db.execute(`alter table ${table} add column ${column} ${ddl}`);
+  }
+}
+
+// Columns the v2 screens need. Safe to re-run.
+async function migrateV2Columns() {
+  await addColumnIfMissing("products", "meta", "text not null default '{}'");
+  await addColumnIfMissing(
+    "products",
+    "sold_without_recipe",
+    "integer not null default 0",
+  );
+  await addColumnIfMissing("sales", "payment", "text");
+  await addColumnIfMissing("sales", "cash_given", "real");
+  await addColumnIfMissing("sale_line_items", "label", "text");
+
+  // SQLite cannot drop NOT NULL, so an older sale_line_items is rebuilt once.
+  // A quick-amount line ("Other R15") has no product behind it.
+  const { rows } = await db.execute(`pragma table_info(sale_line_items)`);
+  if (rows.find((c) => c.name === "product_id")?.notnull === 1) {
+    await db.transaction(async (tx) => {
+      await tx.execute(`
+        create table sale_line_items_new (
+          id text primary key,
+          sale_id text not null references sales(id),
+          product_id text references products(id),
+          label text,
+          quantity_sold real not null,
+          price_at_sale real not null,
+          owner_id text not null,
+          updated_at text not null
+        )`);
+      await tx.execute(`
+        insert into sale_line_items_new
+          (id, sale_id, product_id, label, quantity_sold, price_at_sale, owner_id, updated_at)
+        select id, sale_id, product_id, label, quantity_sold, price_at_sale, owner_id, updated_at
+        from sale_line_items`);
+      await tx.execute(`drop table sale_line_items`);
+      await tx.execute(
+        `alter table sale_line_items_new rename to sale_line_items`,
+      );
+    });
+  }
 }

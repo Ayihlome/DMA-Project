@@ -5,7 +5,7 @@
   "main": "expo-router/entry",
   "scripts": {
     "start": "expo start",
-    "test:backend": "node tests/backend/run.mjs",
+    "check:contract": "node scripts/check-store-contract.mjs",
     "android": "expo start --android",
     "ios": "expo start --ios",
     "typecheck": "tsc --noEmit",

@@ -6,8 +6,12 @@ class SaleRepository {
     ownerID,
     timestamp,
     totalAmount,
+    payment = null,
+    cashGiven = null,
+    allowNegative = false,
     lineItems,
     deductions,
+    withoutRecipe = [],
   }) {
     const deductionTotals = new Map();
     for (const deduction of deductions) {
@@ -20,6 +24,8 @@ class SaleRepository {
       ([productID, quantity]) => ({ productID, quantity }),
     );
 
+    const negativeStock = [];
+
     await db.transaction(async (tx) => {
       // 1. validate the combined requirement for each product
       for (const { productID, quantity } of totalDeductions) {
@@ -31,7 +37,7 @@ class SaleRepository {
         const current = rows[0]?.quantity_on_hand;
         if (current == null)
           throw new Error(`No stock row for product ${productID}`);
-        if (current < quantity)
+        if (current < quantity && !allowNegative)
           throw new Error(`Insufficient stock for product ${productID}`);
       }
 
@@ -39,15 +45,17 @@ class SaleRepository {
 
       // 2. record the sale - sync_status starts 'pending' the sync service, flips it to 'synced' once the queue entry below is replayed
       await tx.execute(
-        `insert into sales (id, owner_id, "timestamp", total_amount, sync_status, updated_at)
-            values (?, ?, ?, ?, 'pending', ?)`,
-        [saleID, ownerID, timestamp, totalAmount, now],
+        `insert into sales (id, owner_id, "timestamp", total_amount, payment, cash_given, sync_status, updated_at)
+               values (?, ?, ?, ?, ?, ?, 'pending', ?)`,
+        [saleID, ownerID, timestamp, totalAmount, payment, cashGiven, now],
       );
 
       await enqueueSync("sales", saleID, "insert", {
         id: saleID,
         timestamp,
         total_amount: totalAmount,
+        payment,
+        cash_given: cashGiven,
         updated_at: now,
       });
 
@@ -55,12 +63,13 @@ class SaleRepository {
       for (const item of lineItems) {
         const lineItemID = crypto.randomUUID();
         await tx.execute(
-          `insert into sale_line_items (id, sale_id, product_id, quantity_sold, price_at_sale, owner_id, updated_at)
-           values (?, ?, ?, ?, ?, ?, ?)`,
+          `insert into sale_line_items (id, sale_id, product_id, label, quantity_sold, price_at_sale, owner_id, updated_at)
+              values (?, ?, ?, ?, ?, ?, ?, ?)`,
           [
             lineItemID,
             saleID,
-            item.productID,
+            item.productID ?? null,
+            item.label ?? null,
             item.quantitySold,
             item.priceAtSale,
             ownerID,
@@ -71,7 +80,8 @@ class SaleRepository {
         await enqueueSync("sale_line_items", lineItemID, "insert", {
           id: lineItemID,
           sale_id: saleID,
-          product_id: item.productID,
+          product_id: item.productID ?? null,
+          label: item.label ?? null,
           quantity_sold: item.quantitySold,
           price_at_sale: item.priceAtSale,
           updated_at: now,
@@ -91,6 +101,7 @@ class SaleRepository {
           [productID],
         );
         const resultingQty = rows[0].quantity_on_hand;
+        if (resultingQty < 0) negativeStock.push(productID);
         const movementID = crypto.randomUUID();
 
         await tx.execute(
@@ -107,7 +118,16 @@ class SaleRepository {
           created_at: now,
         });
       }
+      // 5. composites sold with no recipe deducted nothing: remember how many, until a count
+      for (const [productID, quantity] of withoutRecipe) {
+        await tx.execute(
+          `update products set sold_without_recipe = sold_without_recipe + ? where id = ?`,
+          [quantity, productID],
+        );
+      }
     });
+
+    return { negativeStock };
   }
 
   async getSalesTotal(from, to) {

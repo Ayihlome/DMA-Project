@@ -17,6 +17,7 @@ import SaleRepository from "../Repositories/SaleRepo";
 import StockRepository from "../Repositories/StockRepo";
 import SupplierPriceRepository from "../Repositories/SupplierPriceRepository";
 import SupplierRepository from "../Repositories/SupplierRepository";
+import ShopReadRepository from "../Repositories/ShopReadRepo";
 
 //Engines
 import KPICalculator from "../engines/KPICalculator";
@@ -43,6 +44,7 @@ import { createSaveSupplierPriceUseCase } from "./saveSupplierPrice";
 import { createUpdateProductUseCase } from "./updateProduct";
 import { createGetRecipeUseCase } from "./getRecipe";
 import { createGetDashboardSummaryUseCase } from "./getDashboardSummary";
+import { createLoadShopUseCase } from "./loadShop";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -52,6 +54,7 @@ const productRepository = new ProductRepository();
 const kpiSnapshotRepository = new KPISnapshotRepo();
 const supplierPriceRepository = new SupplierPriceRepository();
 const supplierRepository = new SupplierRepository();
+const shopReadRepository = new ShopReadRepository();
 
 const recipeEngine = new RecipeEngine(recipeRepository, stockRepository);
 const restockEngine = new RestockEngine(
@@ -95,16 +98,14 @@ const rawUseCases = {
     productRepository,
   }),
   createProduct: createCreateProductUseCase({ productRepository }),
-  createSupplier: createCreateSupplierUseCase({ supplierRepository }),
+  createSupplier,
   setRecipeComponents: createSetRecipeComponentsUseCase({
     recipeRepository,
     productRepository,
   }),
   receiveStock: createReceiveStockUseCase({ stockRepository }),
   setOpeningStock: createSetOpeningStockUseCase({ stockRepository }),
-  setSupplierPrice: createSetSupplierPriceUseCase({
-    supplierPriceRepository,
-  }),
+  setSupplierPrice,
   updateProduct: createUpdateProductUseCase({
     productRepository,
     stockRepository,
@@ -166,5 +167,8 @@ export const useCases = Object.fromEntries(
   ]),
 );
 
+useCases.loadShop = whenDatabaseReady(
+  createLoadShopUseCase({ shopReadRepository }),
+);
 // the old name, still used by existing imports
 export const useCase = useCases;
