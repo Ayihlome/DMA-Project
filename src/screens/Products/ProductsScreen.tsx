@@ -4,26 +4,31 @@ import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import { colors } from '../../theme/theme'
-import { useCases } from '../../backend/useCases/container'
-import { useUseCase } from '../../hooks/use-use-case'
-import type { SellableProduct } from '../Sales/data/productCards'
-import { Loading, LoadError } from '../../components/common/ScreenState'
+import { useStore } from '../../store'
+import { available } from '../../data/inventory'
+import type { Product } from '../../data/types'
 import { styles } from './styles'
 
 const rand = (n: number) => `R${n.toFixed(2)}`
 
-function statusText(p: SellableProduct) {
-  if (p.is_composite) {
-    if (!p.hasRecipe) return { text: 'Needs a recipe', warn: true }
+function statusText(state: Parameters<typeof available>[0], p: Product) {
+  if (p.composite) {
+    if (!p.recipe || p.recipe.length === 0) return { text: 'Needs a recipe', warn: true }
     return { text: 'Made to order' }
   }
-  return { text: `${p.stockOnHand} in stock`, warn: p.stockOnHand < 5 }
+  const qty = available(state, p)
+  return { text: `${qty} in stock`, warn: qty < 5 }
 }
 
 export default function ProductsScreen() {
   const insets = useSafeAreaInsets()
-  const { data, error, reload } = useUseCase<SellableProduct[]>(() => useCases.getSellableProducts({}))
-  const products = [...(data ?? [])].sort((a, b) => a.name.localeCompare(b.name))
+  const { state } = useStore()
+  // Ingredients are listed too. They are not sold, but their cost is what a
+  // kota's margin is worked out from, and the starter catalogue creates them —
+  // so hiding them here would leave numbers in the app that nothing can edit.
+  const products = [...state.products].sort(
+    (a, b) => Number(a.sellable) - Number(b.sellable) || a.name.localeCompare(b.name),
+  )
 
   return (
     <ScrollView style={styles.screen} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
@@ -33,16 +38,14 @@ export default function ProductsScreen() {
           <Text style={styles.addText}>Add a product</Text>
         </TouchableOpacity>
 
-        {!data && (error ? <LoadError message={error} onRetry={reload} /> : <Loading />)}
-
-        {data && products.length === 0 && (
+        {products.length === 0 && (
           <Text style={styles.hint}>No products yet. Add the first thing you sell.</Text>
         )}
 
         {products.length > 0 && (
           <View style={styles.list}>
             {products.map((p, i) => {
-              const s = statusText(p)
+              const s = statusText(state, p)
               return (
                 <TouchableOpacity
                   key={p.id}
@@ -57,7 +60,9 @@ export default function ProductsScreen() {
                   <View style={styles.rowText}>
                     <Text style={styles.rowName} numberOfLines={1}>{p.name}</Text>
                     <Text style={styles.rowMeta} numberOfLines={1}>
-                      {p.unit} · {rand(p.selling_price)}
+                      {/* An ingredient has no selling price, so showing R0,00
+                          would be a lie; its cost is the number that matters. */}
+                      {p.sellable ? `${p.unit} · ${rand(p.price)}` : `${p.unit} · ${rand(p.cost)} cost · ingredient`}
                     </Text>
                   </View>
                   <Text style={[styles.rowStatus, s.warn && styles.rowWarn]}>{s.text}</Text>

@@ -1,91 +1,93 @@
 import React, { useState } from 'react'
-import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal } from 'react-native'
+import { View, Text, ScrollView, TouchableOpacity, TextInput, Modal, FlatList } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
 import MaterialIcons from '../../components/common/MaterialIcon'
 import AppHeader from '../../components/common/AppHeader'
-import { Loading, LoadError, Note } from '../../components/common/ScreenState'
-import { colors, radius, spacing, type } from '../../theme/theme'
-import { useCases } from '../../backend/useCases/container'
-import { useUseCase } from '../../hooks/use-use-case'
-import { iconFor, round2 } from '../shared/productPresentation'
+import { colors } from '../../theme/theme'
 import { styles } from './styles'
+import { useStore } from '../../store'
+import { pricesFor, supplierName, recommendations } from '../../data/inventory'
 
 const rand = (n: number) => `R${n.toFixed(2)}`
 
-type StockItem = { id: string; name: string; unit: string; category: string | null; pack_size: number; is_composite: number | boolean }
-type PriceOption = { supplierID: string; supplierName: string; location: string | null; unitPrice: number; minimumOrder: number | null }
+function relativeDate(ts: number, now: number) {
+  const days = Math.round((now - ts) / 86_400_000)
+  if (days === 0) return 'today'
+  if (days === 1) return 'yesterday'
+  return `${days} days ago`
+}
 
 export default function SupplyScreen() {
   const insets = useSafeAreaInsets()
-  const products = useUseCase(async () => {
-    const all: StockItem[] = await useCases.getSellableProducts({})
-    return all.filter(p => !p.is_composite)
-  })
-  const [productId, setProductId] = useState<string | null>(null)
-  const [selected, setSelected] = useState<string | null>(null)
+  const store = useStore()
+  const { state } = store
+  // Stable per mount so "updated N days ago" does not shift on re-render
+  const [now] = useState(() => Date.now())
+
+  const sellableProducts = state.products.filter((p) => p.sellable && !p.composite)
+  const [selectedProductId, setSelectedProductId] = useState(sellableProducts[0]?.id ?? '')
+  const product = sellableProducts.find((p) => p.id === selectedProductId) ?? sellableProducts[0]
+
+  const rawPrices = product ? pricesFor(state, product.id) : []
+  const sorted = rawPrices.map((sp) => ({
+    id: sp.supplierId,
+    name: supplierName(state, sp.supplierId),
+    unitPrice: sp.unitPrice,
+    updated: relativeDate(sp.updatedAt, now),
+    distance: '',
+    minOrder: sp.minOrder ? `${sp.minOrder} ${product?.unitPlural ?? 'units'}` : '1 unit',
+  }))
+
+  const cheapest = sorted[0]
+  const [selected, setSelected] = useState<string | undefined>(undefined)
+  const chosen = sorted.find((s) => s.id === selected) ?? cheapest
+
   const [saved, setSaved] = useState(false)
   const [modalVisible, setModalVisible] = useState(false)
-  const [supplierName, setSupplierName] = useState('')
-  const [packPrice, setPackPrice] = useState('')
-  const [unitsPerPack, setUnitsPerPack] = useState('')
-  const [formError, setFormError] = useState<string | null>(null)
-  const [saving, setSaving] = useState(false)
 
-  const list = products.data ?? []
-  const product = list.find(p => p.id === productId) ?? list[0]
-  const supply = useUseCase<PriceOption[]>(
-    () => (product ? useCases.getSupplierPrices({ productID: product.id }) : Promise.resolve([])),
-    [product?.id],
-  )
-  const sorted = supply.data ?? []
-  const cheapest = sorted[0]
-  const chosen = sorted.find(s => s.supplierID === selected) ?? cheapest
-  const unit = product?.unit ?? 'unit'
-  const packSize = product?.pack_size ?? 1
+  // Modal form state
+  const [modalSupplier, setModalSupplier] = useState('')
+  const [modalPackPrice, setModalPackPrice] = useState('')
+  const [modalUnitsPerPack, setModalUnitsPerPack] = useState(String(product?.packSize ?? 1))
 
-  function openForm() {
-    setSupplierName('')
-    setPackPrice('')
-    setUnitsPerPack(String(packSize))
-    setFormError(null)
-    setModalVisible(true)
+  const recs = product ? recommendations(state).find((r) => r.product.id === product.id) : undefined
+  const priceMonthAgo = rawPrices[0]?.history?.find((h) => {
+    const age = (now - h.at) / 86_400_000
+    return age >= 25 && age <= 35
+  })?.price ?? (cheapest ? cheapest.unitPrice : 0)
+  const priceChange = cheapest ? cheapest.unitPrice - priceMonthAgo : 0
+
+  function handleSavePrice() {
+    if (!product || !modalSupplier.trim() || !modalPackPrice) return
+    const packPrice = parseFloat(modalPackPrice)
+    const unitsPerPack = parseInt(modalUnitsPerPack) || product.packSize || 1
+    if (isNaN(packPrice) || packPrice <= 0) return
+    store.upsertSupplierPrice({
+      productId: product.id,
+      supplierName: modalSupplier.trim(),
+      unitPrice: Math.round((packPrice / unitsPerPack) * 100) / 100,
+    })
+    setModalSupplier('')
+    setModalPackPrice('')
+    setModalUnitsPerPack(String(product.packSize ?? 1))
+    setModalVisible(false)
   }
 
-  async function submitPrice() {
-    if (!product || saving) return
-    setSaving(true)
-    setFormError(null)
-    try {
-      const pack = Number(packPrice.replace(',', '.'))
-      const units = Number(unitsPerPack.replace(',', '.'))
-      if (!(pack >= 0) || !(units > 0)) {
-        setFormError('Enter the pack price and how many are in a pack.')
-        return
-      }
-      const result = await useCases.saveSupplierPrice({
-        productID: product.id,
-        supplierName,
-        unitPrice: round2(pack / units),
-      })
-      if (!result.success) {
-        setFormError(result.errors.join(' '))
-        return
-      }
-      setModalVisible(false)
-      setSaved(false)
-      await supply.reload()
-    } catch (e) {
-      setFormError(e instanceof Error ? e.message : 'The price could not be saved.')
-    } finally {
-      setSaving(false)
-    }
+  function handleBuyFrom() {
+    if (!product || !chosen) return
+    store.setPreferredSupplier(product.id, chosen.id)
+    const qty = recs?.qty ?? product.packSize
+    store.createOrderList([{ productId: product.id, qty, unitPrice: chosen.unitPrice, supplierId: chosen.id }])
+    setSaved(true)
   }
 
-  if (!products.data) {
+  if (!product) {
     return (
       <View style={styles.screen}>
         <AppHeader screenLabel="Supplier prices" />
-        {products.error ? <LoadError message={products.error} onRetry={products.reload} /> : <Loading />}
+        <View style={{ flex: 1, alignItems: 'center', justifyContent: 'center' }}>
+          <Text style={{ color: colors.textSecondary }}>Add products first to track supplier prices.</Text>
+        </View>
       </View>
     )
   }
@@ -93,68 +95,61 @@ export default function SupplyScreen() {
   return (
     <View style={styles.screen}>
       <AppHeader screenLabel="Supplier prices" />
+
+      {/* Product picker */}
+      <FlatList
+        horizontal
+        data={sellableProducts}
+        keyExtractor={(p) => p.id}
+        showsHorizontalScrollIndicator={false}
+        contentContainerStyle={{ paddingHorizontal: 16, paddingVertical: 8, gap: 8 }}
+        renderItem={({ item: p }) => (
+          <TouchableOpacity
+            onPress={() => { setSelectedProductId(p.id); setSelected(undefined); setSaved(false) }}
+            style={[{ paddingHorizontal: 14, paddingVertical: 8, borderRadius: 20, borderWidth: 1, borderColor: p.id === selectedProductId ? colors.primary : colors.borderDefault, backgroundColor: p.id === selectedProductId ? colors.accentTint : colors.bgSurface }]}
+            activeOpacity={0.8}
+          >
+            <Text style={{ color: p.id === selectedProductId ? colors.primary : colors.textPrimary, fontSize: 13, fontWeight: p.id === selectedProductId ? '700' : '400' }}>{p.name}</Text>
+          </TouchableOpacity>
+        )}
+      />
+
       <ScrollView
         contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 170 }]}
         showsVerticalScrollIndicator={false}
       >
-        {list.length === 0 && <Note>No products yet. Add one under Products, then save its supplier prices here.</Note>}
-
-        {list.length > 1 && (
-          <ScrollView horizontal showsHorizontalScrollIndicator={false} contentContainerStyle={{ gap: spacing.xs, paddingBottom: spacing.sm }}>
-            {list.map(p => {
-              const on = p.id === product?.id
-              return (
-                <TouchableOpacity
-                  key={p.id}
-                  onPress={() => { setProductId(p.id); setSelected(null); setSaved(false) }}
-                  style={{
-                    paddingHorizontal: spacing.sm, paddingVertical: 6, borderRadius: radius.full,
-                    borderWidth: 1, borderColor: on ? colors.primary : colors.borderDefault,
-                    backgroundColor: on ? colors.accentTint : colors.bgSurface,
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                >
-                  <Text style={[type.label, { color: on ? colors.primary : colors.textPrimary }]}>{p.name}</Text>
-                </TouchableOpacity>
-              )
-            })}
-          </ScrollView>
-        )}
-
-        {product && (
-          <View style={styles.itemCard}>
-            <View style={styles.itemIcon}>
-              <MaterialIcons name={iconFor(product.category)} size={22} color={colors.primary} />
-            </View>
-            <View style={{ flex: 1 }}>
-              <Text style={styles.itemName}>{product.name}</Text>
-              <Text style={styles.itemPack}>{packSize > 1 ? `Pack of ${packSize}` : `Sold by the ${unit}`}</Text>
-            </View>
+        <View style={styles.itemCard}>
+          <View style={styles.itemIcon}>
+            <MaterialIcons name={product.icon} size={22} color={colors.primary} />
           </View>
-        )}
+          <View style={{ flex: 1 }}>
+            <Text style={styles.itemName}>{product.name}</Text>
+            <Text style={styles.itemPack}>{product.packLabel} · {product.detail}</Text>
+          </View>
+        </View>
 
-        {product && supply.error && !supply.data && <LoadError message={supply.error} onRetry={supply.reload} />}
-        {product && !supply.data && !supply.error && <Loading />}
-        {product && supply.data && sorted.length === 0 && (
-          <Note>No supplier prices saved for {product.name} yet. Tap &quot;Add a new price&quot; to save the first one.</Note>
-        )}
-
-        {cheapest && chosen && (
+        {sorted.length === 0 ? (
+          <Text style={styles.summary}>No supplier prices saved yet. Tap "Add a new price" below to get started.</Text>
+        ) : (
           <>
             <Text style={styles.summary}>
-              Cheapest is <Text style={styles.summaryStrong}>{cheapest.supplierName}</Text> at {rand(cheapest.unitPrice)} a {unit}.
+              Cheapest is <Text style={styles.summaryStrong}>{cheapest.name}</Text> at {rand(cheapest.unitPrice)} per {product.unit}.
+              {' '}
+              {priceChange < 0
+                ? `That's ${rand(Math.abs(priceChange))} less than a month ago.`
+                : priceChange > 0
+                  ? `That's ${rand(priceChange)} more than a month ago.`
+                  : 'Price unchanged from a month ago.'}
             </Text>
 
             <View style={styles.list}>
               {sorted.map((s, i) => {
-                const isSelected = chosen.supplierID === s.supplierID
+                const isSelected = (chosen?.id === s.id)
                 const extra = s.unitPrice - cheapest.unitPrice
-                const meta = [s.location, s.minimumOrder ? `min ${s.minimumOrder}` : null].filter(Boolean).join(' · ')
                 return (
                   <TouchableOpacity
-                    key={s.supplierID}
-                    onPress={() => { setSelected(s.supplierID); setSaved(false) }}
+                    key={s.id}
+                    onPress={() => { setSelected(s.id); setSaved(false) }}
                     style={[styles.row, i > 0 && styles.rowDivider, isSelected && styles.rowSelected]}
                     activeOpacity={0.7}
                     accessibilityRole="radio"
@@ -164,8 +159,10 @@ export default function SupplyScreen() {
                       {isSelected && <View style={styles.radioDot} />}
                     </View>
                     <View style={{ flex: 1 }}>
-                      <Text style={styles.supplierName}>{s.supplierName}</Text>
-                      {meta !== '' && <Text style={styles.supplierMeta}>{meta}</Text>}
+                      <Text style={styles.supplierName}>{s.name}</Text>
+                      <Text style={styles.supplierMeta}>
+                        min {s.minOrder} · updated {s.updated}
+                      </Text>
                     </View>
                     <View style={styles.priceCol}>
                       <Text style={styles.price}>{rand(s.unitPrice)}</Text>
@@ -178,34 +175,33 @@ export default function SupplyScreen() {
               })}
             </View>
 
-            <Text style={styles.listNote}>
-              Price per {unit}.{packSize > 1 ? ` A pack of ${packSize} from ${chosen.supplierName} costs ${rand(chosen.unitPrice * packSize)}.` : ''}
-            </Text>
+            {chosen && (
+              <Text style={styles.listNote}>
+                Price per {product.unit}. A {product.packLabel} from {chosen.name} costs {rand(chosen.unitPrice * product.packSize)}.
+              </Text>
+            )}
           </>
         )}
 
-        {product && (
-          <TouchableOpacity onPress={openForm} style={styles.addBtn} activeOpacity={0.7}>
-            <MaterialIcons name="add" size={20} color={colors.primary} />
-            <Text style={styles.addText}>Add a new price</Text>
-          </TouchableOpacity>
-        )}
+        <TouchableOpacity onPress={() => setModalVisible(true)} style={styles.addBtn} activeOpacity={0.7}>
+          <MaterialIcons name="add" size={20} color={colors.primary} />
+          <Text style={styles.addText}>Add a new price</Text>
+        </TouchableOpacity>
       </ScrollView>
 
-      {chosen && (
-        <View style={[styles.actionBar, { paddingBottom: insets.bottom + 72 }]}>
-          <TouchableOpacity
-            onPress={() => setSaved(true)}
-            style={[styles.actionBtn, saved && styles.actionBtnDone]}
-            activeOpacity={0.85}
-          >
-            {saved && <MaterialIcons name="check" size={20} color={colors.onPrimary} />}
-            <Text style={styles.actionText} numberOfLines={1}>
-              {saved ? `Buying from ${chosen.supplierName}` : `Buy from ${chosen.supplierName}`}
-            </Text>
-          </TouchableOpacity>
-        </View>
-      )}
+      <View style={[styles.actionBar, { paddingBottom: insets.bottom + 72 }]}>
+        <TouchableOpacity
+          onPress={handleBuyFrom}
+          disabled={!chosen}
+          style={[styles.actionBtn, saved && styles.actionBtnDone]}
+          activeOpacity={0.85}
+        >
+          {saved && <MaterialIcons name="check" size={20} color={colors.onPrimary} />}
+          <Text style={styles.actionText} numberOfLines={1}>
+            {saved ? `Buying from ${chosen?.name}` : chosen ? `Buy from ${chosen.name}` : 'Add a price first'}
+          </Text>
+        </TouchableOpacity>
+      </View>
 
       <Modal visible={modalVisible} transparent animationType="slide" onRequestClose={() => setModalVisible(false)}>
         <TouchableOpacity style={styles.modalOverlay} activeOpacity={1} onPress={() => setModalVisible(false)}>
@@ -221,8 +217,8 @@ export default function SupplyScreen() {
               style={styles.input}
               placeholder="e.g. Cambridge Food"
               placeholderTextColor={colors.textSecondary}
-              value={supplierName}
-              onChangeText={setSupplierName}
+              value={modalSupplier}
+              onChangeText={setModalSupplier}
             />
             <View style={{ flexDirection: 'row', gap: 8 }}>
               <View style={{ flex: 1 }}>
@@ -232,24 +228,24 @@ export default function SupplyScreen() {
                   placeholder="135.00"
                   keyboardType="decimal-pad"
                   placeholderTextColor={colors.textSecondary}
-                  value={packPrice}
-                  onChangeText={setPackPrice}
+                  value={modalPackPrice}
+                  onChangeText={setModalPackPrice}
                 />
               </View>
               <View style={{ flex: 1 }}>
-                <Text style={styles.inputLabel}>Units per pack</Text>
+                <Text style={styles.inputLabel}>{product.unitPlural} per pack</Text>
                 <TextInput
                   style={styles.input}
+                  defaultValue={String(product.packSize ?? 1)}
                   keyboardType="number-pad"
                   placeholderTextColor={colors.textSecondary}
-                  value={unitsPerPack}
-                  onChangeText={setUnitsPerPack}
+                  value={modalUnitsPerPack}
+                  onChangeText={setModalUnitsPerPack}
                 />
               </View>
             </View>
-            {formError && <Text style={[type.caption, { color: colors.errorDefault, marginBottom: spacing.xs }]}>{formError}</Text>}
-            <TouchableOpacity onPress={submitPrice} disabled={saving} style={[styles.actionBtn, saving && { opacity: 0.6 }]}>
-              <Text style={styles.actionText}>{saving ? 'Saving...' : 'Save price'}</Text>
+            <TouchableOpacity onPress={handleSavePrice} style={styles.actionBtn}>
+              <Text style={styles.actionText}>Save price</Text>
             </TouchableOpacity>
           </TouchableOpacity>
         </TouchableOpacity>

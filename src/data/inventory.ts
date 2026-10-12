@@ -12,7 +12,8 @@ const USAGE_WINDOW_DAYS = 7
 export type Health = 'setup' | 'out' | 'critical' | 'low' | 'healthy'
 
 export const productById = (s: AppState, id: string) => s.products.find((p) => p.id === id)
-export const stockItems = (s: AppState) => s.products.filter((p) => !p.composite)
+/** Things with a count on the shelf: not composites (derived) and not untracked (airtime). */
+export const stockItems = (s: AppState) => s.products.filter((p) => !p.composite && !p.untracked)
 
 /** Quantity with unit, showing small kg amounts in grams ("50 g"). */
 export function unitQty(p: Product, n: number) {
@@ -25,7 +26,8 @@ export function deductionsFor(s: AppState, lines: { productId: string; qty: numb
   const out = new Map<string, number>()
   for (const l of lines) {
     const p = productById(s, l.productId)
-    if (!p) continue
+    // No product (the quick-amount line) or nothing to count (airtime)
+    if (!p || p.untracked) continue
     if (p.composite) {
       for (const r of p.recipe ?? []) out.set(r.productId, (out.get(r.productId) ?? 0) + r.qty * l.qty)
     } else {
@@ -64,7 +66,24 @@ export function daysCover(s: AppState, p: Product, now = Date.now()) {
   return use > 0 ? available(s, p) / use : Infinity
 }
 
+/**
+ * True while the shop has never counted its stock.
+ *
+ * A freshly seeded catalogue is every product at zero, which `healthOf` reads
+ * as "out of stock" — correct in isolation, useless in aggregate: the owner
+ * would open the Dashboard to forty alerts on their first morning and learn to
+ * ignore all of them. While this is true the Dashboard hides the alerts and
+ * asks for a count instead.
+ *
+ * Having sold anything ends it for good, even if the shop later runs the shelf
+ * down to nothing: at that point the alerts are real and worth having.
+ */
+export const stockUncounted = (s: AppState) =>
+  s.sales.length === 0 && stockItems(s).length > 0 && stockItems(s).every((p) => p.stock <= 0)
+
 export function healthOf(s: AppState, p: Product, now = Date.now()): Health {
+  // Airtime and the like never run low in any sense the app can measure
+  if (p.untracked) return 'healthy'
   if (p.composite && !p.recipe?.length) return 'setup'
   if (available(s, p) <= 0) return 'out'
   const cover = daysCover(s, p, now)
@@ -105,8 +124,11 @@ export function dashboardKpis(s: AppState, now = Date.now()) {
   const salesToday = today.reduce((t, x) => t + x.total, 0)
   const salesYesterday = yesterdaySameTime.reduce((t, x) => t + x.total, 0)
   const items = stockItems(s)
-  const attention = items.filter((p) => needsAction(healthOf(s, p, now)))
-  const critical = attention.filter((p) => ['out', 'critical'].includes(healthOf(s, p, now)))
+  // Nothing counted yet: every item would be "out", so there is nothing useful
+  // to say. The Dashboard shows the count-your-stock banner instead.
+  const uncounted = stockUncounted(s)
+  const attention = uncounted ? [] : items.filter((p) => needsAction(healthOf(s, p, now)))
+  const critical = uncounted ? [] : attention.filter((p) => ['out', 'critical'].includes(healthOf(s, p, now)))
   const stockValue = items.reduce((t, p) => t + p.stock * p.cost, 0)
   const soonest = Math.min(...items.map((p) => daysCover(s, p, now)))
   return { salesToday, salesYesterday, salesCount: today.length, attention, critical, stockValue, itemCount: items.length, soonest }
@@ -127,6 +149,8 @@ export type Recommendation = {
 
 /** FR6/FR9: rules-based, explainable restock suggestions for every stock item that needs action. */
 export function recommendations(s: AppState, now = Date.now()): Recommendation[] {
+  // Suggesting a restock of everything, from no usage data, is noise
+  if (stockUncounted(s)) return []
   return stockItems(s)
     .map((p) => ({ p, h: healthOf(s, p, now) }))
     .filter(({ h }) => needsAction(h))

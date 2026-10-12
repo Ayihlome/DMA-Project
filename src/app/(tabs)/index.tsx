@@ -1,5 +1,5 @@
-import DashboardScreen from '@/screens/Dashboard/DashboardScreen';
+import HomeScreen from '@/screens/Home/HomeScreen';
 
-export default function DashboardRoute() {
-  return <DashboardScreen />;
+export default function HomeRoute() {
+  return <HomeScreen />;
 }

@@ -1,21 +1,24 @@
 import React, { useState } from 'react'
-import { Text } from 'react-native'
-import { router } from 'expo-router'
+import { Text, View } from 'react-native'
+import { router, Link } from 'expo-router'
+import Checkbox from '../../components/ui/Checkbox'
 import { supabase } from '../../lib/supabase'
 import { AuthLayout, Field, SubmitButton } from './AuthForm'
 import { styles } from './styles'
 
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState('')
+  const [shopName, setShopName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
+  const [consent, setConsent] = useState(false)
   const [loading, setLoading] = useState(false)
   const [error, setError] = useState<string | null>(null)
 
   async function register() {
-    if (!fullName.trim() || !email.trim() || !password) {
-      setError('Fill in your name, email and password.')
+    if (!fullName.trim() || !shopName.trim() || !email.trim() || !password) {
+      setError('Fill in your name, your shop name, email and password.')
       return
     }
     if (password.length < 6) {
@@ -26,13 +29,26 @@ export default function RegisterScreen() {
       setError('Passwords do not match.')
       return
     }
+    if (!consent) {
+      setError('Please agree to the privacy notice to create an account.')
+      return
+    }
 
     setLoading(true)
     setError(null)
+    // POPIA: the moment consent was given travels as metadata, because the
+    // profile row only exists once the email is verified. The trigger in
+    // 20261010120000_profile_consent.sql copies it into profiles.consent_at.
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim() } },
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          shop_name: shopName.trim(),
+          consent_at: new Date().toISOString(),
+        },
+      },
     })
     setLoading(false)
 
@@ -52,6 +68,7 @@ export default function RegisterScreen() {
       switchText="Already have an account?"
       switchLabel="Sign in"
       switchHref="/sign-in"
+      segment="register"
     >
       {error && <Text style={styles.error}>{error}</Text>}
       <Field
@@ -61,6 +78,14 @@ export default function RegisterScreen() {
         placeholder="Bongani Dlamini"
         autoComplete="name"
         textContentType="name"
+      />
+      <Field
+        label="Shop name"
+        value={shopName}
+        onChangeText={setShopName}
+        placeholder="Bongani's Spaza"
+        autoComplete="organization"
+        textContentType="organizationName"
       />
       <Field
         label="Email"
@@ -76,7 +101,7 @@ export default function RegisterScreen() {
         label="Password"
         value={password}
         onChangeText={setPassword}
-        placeholder="At least 6 characters"
+        hint="At least 6 characters"
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
@@ -91,7 +116,20 @@ export default function RegisterScreen() {
         textContentType="newPassword"
         onSubmitEditing={register}
       />
-      <SubmitButton label="Create account" loading={loading} onPress={register} />
+      <View style={styles.consentRow}>
+        <Checkbox
+          checked={consent}
+          onToggle={() => setConsent(c => !c)}
+          accessibilityLabel="Agree to the privacy notice"
+        />
+        <Text style={styles.consentText}>
+          I agree that StockMate may store my shop&apos;s stock and sales data to run the app.{' '}
+          <Link href="/privacy">
+            <Text style={styles.consentLink}>Read the privacy notice</Text>
+          </Link>
+        </Text>
+      </View>
+      <SubmitButton label="Create account" loading={loading} onPress={register} disabled={!consent} />
     </AuthLayout>
   )
 }

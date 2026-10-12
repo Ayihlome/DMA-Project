@@ -7,6 +7,13 @@ type Props = {
 }
 
 const IOS_SYMBOLS: Record<string, string> = {
+  edit_square: 'square.and.pencil',
+  pause: 'pause.fill',
+  undo: 'arrow.uturn.backward',
+  backspace: 'delete.left',
+  chevron_left: 'chevron.left',
+  shopping_cart: 'cart.fill',
+  home: 'house.fill',
   add: 'plus',
   add_circle: 'plus.circle.fill',
   add_shopping_cart: 'cart.badge.plus',
@@ -57,6 +64,12 @@ const IOS_SYMBOLS: Record<string, string> = {
   egg: 'oval.fill',
   shopping_basket: 'basket.fill',
   receipt_long: 'list.bullet.rectangle.fill',
+  grain: 'leaf.fill',
+  local_bar: 'wineglass.fill',
+  kitchen: 'refrigerator.fill',
+  fastfood: 'takeoutbag.and.cup.and.straw.fill',
+  sell: 'tag.fill',
+  cookie: 'circle.grid.2x2.fill',
 }
 
 export default function MaterialIcon({ name, size = 24, color = '#000' }: Props) {

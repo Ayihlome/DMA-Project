@@ -24,7 +24,7 @@ import RecipeEngine from "../engines/RecipeEngine";
 import RestockEngine from "../engines/RestockEngine";
 
 //Use cases
-import { createGetDashboardKpiUseCase } from "./dashboardKPIs";
+import { createGetDashboardKpiUseCase } from "./DashboardKPIs";
 import { createRecordSaleUseCase } from "./recordSale";
 import { createGenerateRestockPlanUseCase } from "./generateRestockPlan";
 
