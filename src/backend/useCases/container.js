@@ -60,9 +60,9 @@ import { applyStarterPacks } from "./applyStarterPacks";
 import { createVoidSaleUseCase } from "./voidSale";
 import {
   createSetBudgetUseCase,
-  createUpdateSellGridUseCase,
+  createSaveSellGridUseCase,
   createSetRestockDayUseCase,
-  createSkipOnboardingUseCase,
+  createMarkOnboardedUseCase,
 } from "./settings";
 import {
   createSavePurchaseOrdersUseCase,
