@@ -1,3 +1,4 @@
+import { voidSale } from "@/data/actions";
 import { db } from "../data/local/db";
 
 // Reads the whole shop in one go for loadShop. Read-only: nothing here writes or queues.
@@ -37,8 +38,15 @@ class ShopReadRepository {
 
   async sales() {
     const { rows } = await db.execute(
-      `select id, "timestamp", total_amount, payment, cash_given from sales order by "timestamp", rowid`,
+      `select id, "timestamp", total_amount, payment, cash_given from sales where voided_at is null order by "timestamp", rowid`,
     );
+    return rows;
+  }
+
+  async voidSale() {
+    const { rows } =
+      await db.execute(`select id, "timestamp", total_amount, payment, cash_given, voided_at
+       from sales where voided_at is not null order by voided_at, rowid`);
     return rows;
   }
 

@@ -1,7 +1,4 @@
 /**
- * Everything the v2 screens read, in the exact AppState shape src/data/types.ts defines,
- * so the screens and src/data/inventory.ts keep working with no change.
- *
  * Input: none
  * Output: AppState (see src/data/types.ts)
  *
@@ -35,6 +32,7 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
       suppliers,
       prices,
       sales,
+      voided,
       lines,
       settings,
       ops,
@@ -45,6 +43,7 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
       repo.suppliers(),
       repo.supplierPrices(),
       repo.sales(),
+      repo.voidedSales(),
       repo.saleLines(),
       repo.settings(),
       repo.unsyncedOps(),
@@ -72,6 +71,14 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
       });
       linesBySale.set(l.sale_id, list);
     }
+    const toSale = (s) => ({
+      id: s.id,
+      at: ms(s.timestamp),
+      lines: linesBySale.get(s.id) ?? [],
+      total: Number(s.total_amount),
+      ...(s.payment ? { payment: s.payment } : {}),
+      ...(s.cash_given != null ? { cashGiven: Number(s.cash_given) } : {}),
+    });
 
     return {
       version: 1,
@@ -126,13 +133,10 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
         // no price history table yet: one point, so "vs last month" stays empty
         history: [{ at: ms(p.updated_at), price: Number(p.unit_price) }],
       })),
-      sales: sales.map((s) => ({
-        id: s.id,
-        at: ms(s.timestamp),
-        lines: linesBySale.get(s.id) ?? [],
-        total: Number(s.total_amount),
-        ...(s.payment ? { payment: s.payment } : {}),
-        ...(s.cash_given != null ? { cashGiven: Number(s.cash_given) } : {}),
+      sales: sales.map(toSale),
+      voidedSales: voided.map((s) => ({
+        ...toSale(s),
+        voidedAt: ms(s.voided_at),
       })),
       purchases: [], // filled by the order use cases (createOrderList / receivePurchase / cancelPurchase)
       preferred: json(settings.preferred, {}),

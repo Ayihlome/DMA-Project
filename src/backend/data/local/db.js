@@ -116,6 +116,8 @@ export async function runMigration() {
       total_amount real not null,
       payment text,
       cash_given real,
+      voided_at text,
+      voided_at text,
       sync_status text not null default 'pending',
       updated_at text not null
     );
@@ -381,6 +383,8 @@ async function migrateV2Columns() {
       await tx.execute(
         `alter table sale_line_items_new rename to sale_line_items`,
       );
+      await addColumnIfMissing("sales", "cash_given", "real");
+      await addColumnIfMissing("sales", "voided_at", "text");
     });
   }
 }

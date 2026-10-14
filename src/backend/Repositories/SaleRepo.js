@@ -129,12 +129,132 @@ class SaleRepository {
 
     return { negativeStock };
   }
+  async getSale(saleID) {
+    const { rows } = await db.execute(`select * from sales where id = ?`, [
+      saleID,
+    ]);
+    return rows[0] ?? null;
+  }
+
+  async getLineItems(saleID) {
+    const { rows } = await db.execute(
+      `select product_id, quantity_sold from sale_line_items where sale_id = ?`,
+      [saleID],
+    );
+    return rows;
+  }
+
+  // Takes a sale back: marks it voided (it stays on file) and puts its stock back as movements.
+  async voidSale({ saleID, deductions, withoutRecipe = [] }) {
+    const now = new Date().toISOString();
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        `update sales set voided_at = ?, updated_at = ? where id = ? and voided_at is null`,
+        [now, now, saleID],
+      );
+      await enqueueSync("sales", saleID, "update", {
+        voided_at: now,
+        updated_at: now,
+      });
+
+      for (const { productID, quantity } of deductions) {
+        await tx.execute(
+          `update stock_items set quantity_on_hand = quantity_on_hand + ?, updated_at = ? where product_id = ?`,
+          [quantity, now, productID],
+        );
+        const { rows } = await tx.execute(
+          `select quantity_on_hand from stock_items where product_id = ?`,
+          [productID],
+        );
+        const movementID = crypto.randomUUID();
+        await tx.execute(
+          `insert into stock_movements (id, product_id, delta, resulting_quantity, reason, created_at)
+           values (?, ?, ?, ?, 'sale_void', ?)`,
+          [movementID, productID, quantity, rows[0].quantity_on_hand, now],
+        );
+        await enqueueSync("stock_movements", movementID, "insert", {
+          id: movementID,
+          product_id: productID,
+          delta: quantity,
+          reason: "sale_void",
+          created_at: now,
+        });
+      }
+
+      for (const [productID, quantity] of withoutRecipe) {
+        await tx.execute(
+          `update products set sold_without_recipe = max(0, sold_without_recipe - ?) where id = ?`,
+          [quantity, productID],
+        );
+      }
+    });
+  }
+
+  async getSale(saleID) {
+    const { rows } = await db.execute(`select * from sales where id = ?`, [
+      saleID,
+    ]);
+    return rows[0] ?? null;
+  }
+
+  async getLineItems(saleID) {
+    const { rows } = await db.execute(
+      `select product_id, quantity_sold from sale_line_items where sale_id = ?`,
+      [saleID],
+    );
+    return rows;
+  }
+  // Takes a sale back: marks it voided (it stays on file) and puts its stock back as movements.
+  async voidSale({ saleID, deductions, withoutRecipe = [] }) {
+    const now = new Date().toISOString();
+    await db.transaction(async (tx) => {
+      await tx.execute(
+        `update sales set voided_at = ?, updated_at = ? where id = ? and voided_at is null`,
+        [now, now, saleID],
+      );
+      await enqueueSync("sales", saleID, "update", {
+        voided_at: now,
+        updated_at: now,
+      });
+
+      for (const { productID, quantity } of deductions) {
+        await tx.execute(
+          `update stock_items set quantity_on_hand = quantity_on_hand + ?, updated_at = ? where product_id = ?`,
+          [quantity, now, productID],
+        );
+        const { rows } = await tx.execute(
+          `select quantity_on_hand from stock_items where product_id = ?`,
+          [productID],
+        );
+        const movementID = crypto.randomUUID();
+        await tx.execute(
+          `insert into stock_movements (id, product_id, delta, resulting_quantity, reason, created_at)
+           values (?, ?, ?, ?, 'sale_void', ?)`,
+          [movementID, productID, quantity, rows[0].quantity_on_hand, now],
+        );
+        await enqueueSync("stock_movements", movementID, "insert", {
+          id: movementID,
+          product_id: productID,
+          delta: quantity,
+          reason: "sale_void",
+          created_at: now,
+        });
+      }
+
+      for (const [productID, quantity] of withoutRecipe) {
+        await tx.execute(
+          `update products set sold_without_recipe = max(0, sold_without_recipe - ?) where id = ?`,
+          [quantity, productID],
+        );
+      }
+    });
+  }
 
   async getSalesTotal(from, to) {
     const { rows } = await db.execute(
       `select coalesce(sum(total_amount), 0) as total
        from sales
-       where timestamp >= ? and timestamp < ?`,
+       where timestamp >= ? and timestamp < ? and voided_at is null`,
       [from, to],
     );
     return Number(rows[0]?.total) || 0;
@@ -148,7 +268,7 @@ class SaleRepository {
       `select coalesce(sum(sli.quantity_sold), 0) as total
         from sale_line_items sli
         join sales s on s.id = sli.sale_id
-        where sli.product_id = ? and s."timestamp" >= ?`,
+        where sli.product_id = ? and s."timestamp" >= ? and s.voided_at is null`,
       [productID, since],
     );
 

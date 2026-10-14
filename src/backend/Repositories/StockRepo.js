@@ -31,7 +31,7 @@ class StockRepository {
     const { rows } = await db.execute(
       `select coalesce(sum(-delta), 0) as total
        from stock_movements
-       where product_id = ? and reason = 'sale_deduction' and delta < 0 and created_at >= ?`,
+       where product_id = ? and reason in ('sale_deduction', 'sale_void') and created_at >= ?`,
       [productID, since],
     );
     return rows[0]?.total ?? 0;

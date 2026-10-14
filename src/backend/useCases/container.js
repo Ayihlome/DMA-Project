@@ -26,7 +26,7 @@ import RecipeEngine from "../engines/RecipeEngine";
 import RestockEngine from "../engines/RestockEngine";
 
 //Use cases
-import { createGetDashboardKpiUseCase } from "./dashboardKPIs";
+import { createGetDashboardKpiUseCase } from "./DashboardKPIs";
 import { createRecordSaleUseCase } from "./recordSale";
 import { createGenerateRestockPlanUseCase } from "./generateRestockPlan";
 
@@ -49,6 +49,8 @@ import { createLoadShopUseCase } from "./loadShop";
 import { createClaimDeviceUseCase } from "./claimDevice";
 import { createSetStockCountsUseCase } from "./setStockCounts";
 import { createAdjustStockUseCase } from "./adjustStock";
+import { createVoidSaleUseCase } from "./voidSale";
+import { voidSale } from "@/data/actions";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -103,6 +105,11 @@ const rawUseCases = {
     productRepository,
   }),
   adjustStock: createAdjustStockUseCase({ stockRepository }),
+  voidSale: createVoidSaleUseCase({
+    saleRepository,
+    productRepository,
+    recipeRepository,
+  }),
   setStockCounts: createSetStockCountsUseCase({
     productRepository,
     stockRepository,

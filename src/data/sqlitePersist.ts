@@ -63,7 +63,14 @@ const failed = (r: { success?: boolean; errors?: string[] } | undefined, what: s
   r?.success ? [] : [`${what}: ${(r?.errors ?? ['no answer']).join(', ')}`]
 
 /** A sale. Lenient: the counter never refuses one over stock, a negative count is how an item gets flagged. */
-export async function persistSale(uc: UseCases, ownerID: string, lines: SaleInput, meta: SaleMeta = {}) {
+export async function persistSale(
+  uc: UseCases,
+  ownerID: string,
+  lines: SaleInput,
+  meta: SaleMeta = {},
+  // told the real sale id, because the screen's own copy of the sale has a placeholder id until the next refresh
+  onSaleId?: (saleID: string) => void,
+) {
   const r = await uc.recordSale({
     ownerID,
     allowNegativeStock: true,
@@ -78,7 +85,12 @@ export async function persistSale(uc: UseCases, ownerID: string, lines: SaleInpu
         ...(l.label ? { label: l.label } : {}),
       })),
   })
+  if (r?.success && onSaleId) onSaleId(r.saleID)
   return failed(r, 'recordSale')
+}
+/** Takes a sale back: marked voided on file, its stock goes back. */
+export async function persistVoid(uc: UseCases, saleID: string) {
+  return failed(await uc.voidSale({ saleID }), 'voidSale')
 }
 
 /** Stock arriving from a delivered order. */

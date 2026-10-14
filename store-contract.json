@@ -28,7 +28,8 @@
     "updateProduct",
     "updateProfile",
     "updateSellGrid",
-    "upsertSupplierPrice"
+    "upsertSupplierPrice",
+    "voidSale"
   ],
   "AppState": [
     "budget",
@@ -44,7 +45,8 @@
     "sales",
     "sellGrid?",
     "suppliers",
-    "version"
+    "version",
+    "voidedSales?"
   ],
   "Product": [
     "category",

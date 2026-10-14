@@ -24,7 +24,7 @@ import type { AppState } from './types'
 import type { BackupStatus } from '../lib/cloudBackup'
 import { StoreContext } from '../store'
 import { useCases } from '../backend/useCases/container'
-import { demoShop, emptyShop, newId, persistUndoStock, overlayOf, persistChange, persistReceive, persistSale, uuidify, withOverlay, type Overlay } from './sqlitePersist'
+import { demoShop, emptyShop, newId, persistUndoStock, persistVoid, overlayOf, persistChange, persistReceive, persistSale, uuidify, withOverlay, type Overlay } from './sqlitePersist'
 const overlayKey = (ownerId: string) => `stockevo-sqlite-overlay:${ownerId}`
 const SYNC_EVERY_MS = 60_000
 
@@ -63,6 +63,7 @@ export function SqliteStoreProvider({
   const jobs = useRef(0)
   const chain = useRef<Promise<unknown>>(Promise.resolve())
   const syncing = useRef(false)
+  const saleIds = useRef(new Map<string, string>())
 
   const commit = useCallback((next: AppState) => {
     ref.current = next
@@ -195,7 +196,7 @@ export function SqliteStoreProvider({
     const api: Pick<
       A.StoreApi,
       | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'createOrderList'
-               | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
+               | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'voidSale' |'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
       | 'setBudget' | 'updateProfile' | 'finishOnboarding' | 'skipOnboarding' | 'setStockCounts' | 'resetDemoData'
     > = {
       recordSale: (lines, meta) => {
@@ -203,7 +204,8 @@ export function SqliteStoreProvider({
         if (!check.ok || !check.state) return { ok: false, message: check.message }
         commit(check.state)
         const owner = ownerRef.current!
-        enqueue(() => persistSale(useCases, owner, lines, meta))
+        const placeholder = check.state.sales[check.state.sales.length - 1].id
+        enqueue(() => persistSale(useCases, owner, lines, meta, (realId) => saleIds.current.set(placeholder, realId)))
         return { ok: true, message: check.message }
       },
 
@@ -280,6 +282,12 @@ export function SqliteStoreProvider({
         enqueue(() => persistUndoStock(useCases, undone.flatMap((p) => p.lines)))
       },
       setRestockDay: (day) => local((s) => A.setRestockDay(s, day)),
+      voidSale: (saleId) => {
+        const next = A.voidSale(cur(), saleId)
+        if (next === cur()) return
+        commit(next)
+        enqueue(() => persistVoid(useCases, saleIds.current.get(saleId) ?? saleId))
+      },
       cancelPurchase: (id) => local((s) => A.cancelPurchase(s, id)),
 
       setPreferredSupplier: (productId, supplierId) => local((s) => A.setPreferredSupplier(s, productId, supplierId)),
