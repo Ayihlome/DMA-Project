@@ -19,6 +19,7 @@ import SupplierPriceRepository from "../Repositories/SupplierPriceRepository";
 import SupplierRepository from "../Repositories/SupplierRepository";
 import ShopReadRepository from "../Repositories/ShopReadRepo";
 import DeviceRepository from "../Repositories/DeviceRepo";
+import DeviceSettingsRepository from "../Repositories/DeviceSettingsRepo";
 
 //Engines
 import KPICalculator from "../engines/KPICalculator";
@@ -49,8 +50,14 @@ import { createLoadShopUseCase } from "./loadShop";
 import { createClaimDeviceUseCase } from "./claimDevice";
 import { createSetStockCountsUseCase } from "./setStockCounts";
 import { createAdjustStockUseCase } from "./adjustStock";
+<<<<<<< HEAD
 import { createVoidSaleUseCase } from "./voidSale";
 import { voidSale } from "@/data/actions";
+=======
+import { createSetPreferredSupplierUseCase } from "./setPreferredSupplier";
+import { createSetStockCountsUseCase } from "./setStockCounts";
+import { createUpdateProfileUseCase } from "./updateProfile";
+>>>>>>> f43b0e750200a0027b7cb0b95c13206454dce155
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -62,6 +69,7 @@ const supplierPriceRepository = new SupplierPriceRepository();
 const supplierRepository = new SupplierRepository();
 const shopReadRepository = new ShopReadRepository();
 const deviceRepository = new DeviceRepository();
+const deviceSettingsRepository = new DeviceSettingsRepository();
 
 const recipeEngine = new RecipeEngine(recipeRepository, stockRepository);
 const restockEngine = new RestockEngine(
@@ -148,6 +156,16 @@ const rawUseCases = {
     supplierRepository,
     createSupplier,
     setSupplierPrice,
+  }),
+  setPreferredSupplier: createSetPreferredSupplierUseCase({
+    deviceSettingsRepository
+  }),
+  setStockCounts: createSetStockCountsUseCase ({
+    productRepository,
+    stockRepository,
+  }),
+  updateProfile: createUpdateProfileUseCase ({
+    deviceSettingsRepository
   }),
   claimDevice: createClaimDeviceUseCase({ deviceRepository }),
   // { retryFailed: true } first gives rows that were parked as failed another go.
