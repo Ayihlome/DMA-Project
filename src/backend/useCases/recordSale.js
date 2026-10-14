@@ -7,7 +7,7 @@
  *       price?: number,           // airtime amount, or the quick amount
  *       label?: string,           // quick amount only
  *     }],
- *     payment?: "Cash" | "Card" | "EFT",
+ *     payment?: "Cash" | "Card",
  *     cashGiven?: number,         // only kept when payment is Cash
  *     allowNegativeStock?: boolean, // v2: never block a sale; flag it for a count instead
  *   }
@@ -20,7 +20,7 @@
  */
 
 export const QUICK_AMOUNT_ID = "quick-amount";
-const PAYMENTS = ["Cash", "Card", "EFT"];
+const PAYMENTS = ["Cash", "Card"];
 
 function parseMeta(product) {
   try {
