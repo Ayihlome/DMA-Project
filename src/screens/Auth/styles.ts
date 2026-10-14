@@ -1,80 +1,38 @@
 import { StyleSheet } from 'react-native'
-import { colors, spacing, radius, type, card } from '../../theme/theme'
+import { colors, radius, space, type } from '../../theme/tokens'
 
+/**
+ * Auth styles, rebuilt on the STOCK_EVO_DESIGN.md tokens. The screen chrome now
+ * lives in AuthShell; what's left here is the form body, messages and links.
+ */
 export const styles = StyleSheet.create({
-  screen: { flex: 1, backgroundColor: colors.bgBase },
-  scroll: { flexGrow: 1, justifyContent: 'center', padding: spacing.lg },
-  inner: { width: '100%', maxWidth: 420, alignSelf: 'center' },
+  form: { gap: space.md },
 
-  brand: { alignItems: 'center', marginBottom: spacing.lg, gap: spacing.xs },
-  logo: {
-    width: 56,
-    height: 56,
-    borderRadius: radius.xl,
-    backgroundColor: colors.primary,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  shopName: { ...type.h1, color: colors.textPrimary },
-  subtitle: { ...type.label, color: colors.textSecondary, textAlign: 'center' },
-
-  card: { ...card.base, gap: spacing.md, padding: spacing.lg },
-  title: { ...type.h2, color: colors.textPrimary },
-
-  field: { gap: spacing.xs2 },
-  label: { ...type.captionMedium, color: colors.textSecondary },
-  input: {
-    ...type.body,
-    color: colors.textPrimary,
-    backgroundColor: colors.bgSurface,
-    borderWidth: 1,
-    borderColor: colors.borderDefault,
-    borderRadius: radius.sm,
-    paddingHorizontal: spacing.sm,
-    paddingVertical: spacing.sm,
-  },
-
+  // Messages sit above the fields. Both carry an icon-free tinted block: the
+  // colour is backed by the wording, never the only signal.
   error: {
-    ...type.label,
-    color: colors.errorDefault,
-    backgroundColor: colors.errorTint,
-    padding: spacing.sm,
+    ...type.bodyStrong,
+    color: colors.danger,
+    backgroundColor: '#FDECEA',
+    padding: space.lg,
     borderRadius: radius.sm,
+    overflow: 'hidden',
   },
   notice: {
-    ...type.label,
-    color: colors.secondary,
-    backgroundColor: colors.successTint,
-    padding: spacing.sm,
+    ...type.bodyStrong,
+    color: colors.ink,
+    backgroundColor: colors.brandSoft,
+    padding: space.lg,
     borderRadius: radius.sm,
+    overflow: 'hidden',
   },
 
-  button: {
-    backgroundColor: colors.primary,
-    borderRadius: radius.md,
-    paddingVertical: spacing.sm + 2,
-    alignItems: 'center',
-    marginTop: spacing.xs,
-  },
-  buttonDisabled: { opacity: 0.6 },
-  buttonText: { ...type.bodyMedium, color: colors.onPrimary },
+  switchRow: { flexDirection: 'row', justifyContent: 'center', gap: space.xs },
+  switchText: { ...type.body, color: colors.muted },
+  switchLink: { ...type.bodyStrong, color: colors.ink, textDecorationLine: 'underline' },
 
-  switchRow: { flexDirection: 'row', justifyContent: 'center', marginTop: spacing.md, gap: 4 },
-  switchText: { ...type.label, color: colors.textSecondary },
-  switchLink: { ...type.labelBold, color: colors.primary },
-
-  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: spacing.sm, marginTop: spacing.xs2 },
-  checkbox: {
-    width: 24,
-    height: 24,
-    borderRadius: radius.sm,
-    borderWidth: 2,
-    borderColor: colors.borderDefault,
-    alignItems: 'center',
-    justifyContent: 'center',
-    marginTop: 1,
-  },
-  checkboxOn: { borderColor: colors.primary, backgroundColor: colors.primary },
-  consentText: { ...type.label, color: colors.textSecondary, flex: 1, lineHeight: 20 },
-  consentLink: { ...type.labelBold, color: colors.primary },
+  // Consent row on Create account
+  consentRow: { flexDirection: 'row', alignItems: 'flex-start', gap: space.md },
+  consentText: { ...type.caption, color: colors.muted, flex: 1 },
+  consentLink: { ...type.caption, color: colors.ink, textDecorationLine: 'underline' },
 })

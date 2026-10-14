@@ -14,6 +14,10 @@ export function withLogging(name, useCase) {
       logger.error(name, "threw", {
         ms: Date.now() - start,
         error: err.message,
+        stack: String(err.stack ?? "")
+          .split("\n")
+          .slice(0, 8)
+          .join(" | "),
       });
       throw err;
     }

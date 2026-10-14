@@ -9,6 +9,7 @@ class Product {
     isComposite,
     packSize,
     openingStock,
+    meta,
   }) {
     Object.assign(this, {
       id,
@@ -20,6 +21,7 @@ class Product {
       is_composite: isComposite,
       packSize,
       openingStock,
+      meta: meta ?? {},
     });
   }
 

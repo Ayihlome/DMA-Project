@@ -2,19 +2,18 @@ import React, { useCallback, useEffect, useState } from 'react';
 import { AccessibilityInfo, StyleSheet, useWindowDimensions, View } from 'react-native';
 import Reanimated, {
   Easing,
-  interpolate,
-  runOnJS,
   useAnimatedProps,
   useAnimatedStyle,
   useSharedValue,
   withDelay,
-  withSequence,
   withTiming,
   type SharedValue,
 } from 'react-native-reanimated';
-import Svg, { G, Path } from 'react-native-svg';
+import { scheduleOnRN } from 'react-native-worklets';
+import Svg, { Path } from 'react-native-svg';
 import * as SplashScreen from 'expo-splash-screen';
-import { colors } from '../theme/theme';
+import { LOGO_PATHS, LOGO_STROKE_WIDTH, LOGO_VIEWBOX } from './brand/logoPaths';
+import { colors, fonts } from '../theme/tokens';
 
 /**
  * Reanimated, not the classic Animated API. react-native-svg's web build routes
@@ -23,17 +22,34 @@ import { colors } from '../theme/theme';
  */
 const AnimatedPath = Reanimated.createAnimatedComponent(Path);
 
-// Stroke lengths of each path (in the 1000x1000 design space), used for the "draw-on" effect
-const LEN = { hex: 1100, y: 370, v: 184, tape: 140, line: 150 };
 const WORD = 'stock evo'.split('');
-const EASE = Easing.bezier(0.65, 0, 0.35, 1);
+const EASE_OUT = Easing.bezier(0.23, 1, 0.32, 1);
 
-// Letter i fades up over LETTER_MS starting at LETTER_FROM + i * LETTER_STAGGER.
-// The name comes in first, so the screen never reads as blank while the mark is
-// still being drawn above it.
-const LETTER_FROM = 300;
-const LETTER_STAGGER = 55;
-const LETTER_MS = 560;
+/**
+ * Intro timing, ~2.2s end to end.
+ *
+ * Deliberately slower than the 300ms this app uses everywhere else. That rule
+ * is about motion the user sits through repeatedly; this is the brand moment,
+ * it plays once per launch, and the whole point is watching the box get drawn.
+ * Owner's call, and the right one — but it is the one place in the app allowed
+ * to take its time, so don't copy these numbers anywhere else.
+ *
+ * The strokes overlap rather than queueing strictly, which keeps it feeling
+ * drawn rather than spelled out one segment at a time.
+ */
+const DRAW_MS = 520;
+const DRAW_STAGGER = 260;
+/** Total travel of the shared draw value. */
+const DRAW_TOTAL = DRAW_MS + (LOGO_PATHS.length - 1) * DRAW_STAGGER;
+// The name starts arriving while the tape is still being drawn, so the screen
+// never reads as finished-then-waiting.
+const LETTER_FROM = 1100;
+const LETTER_STAGGER = 45;
+const LETTER_MS = 300;
+/** When the last stroke and the last letter have both landed. */
+const INTRO_MS = Math.max(DRAW_TOTAL, LETTER_FROM + WORD.length * LETTER_STAGGER + LETTER_MS);
+/** The handover into the sign-in screen. */
+const EXIT_MS = 420;
 
 type Props = {
   /** Set to true once your app has finished loading (DB, session, fonts…) */
@@ -48,26 +64,23 @@ export default function AnimatedSplash({
   isReady,
   onFinish,
   // Defaults match the native splash in app.json so the handover does not flash
-  background = colors.bgBase,
-  ink = colors.primary,
+  background = colors.brand,
+  ink = colors.ink,
 }: Props) {
   const { width, height } = useWindowDimensions();
-  const size = Math.min(width, height, 600);
-  const s = size / 1000;
+  const size = Math.min(width, height, 320) * 0.46;
 
-  const hex = useSharedValue(0);
-  const yLine = useSharedValue(0);
-  const vLine = useSharedValue(0);
-  const tape = useSharedValue(0);
-  const line = useSharedValue(0);
-  const flap = useSharedValue(0);
-  const pop = useSharedValue(1);
+  // One value drives every stroke; each path offsets itself off it, so there
+  // are no per-path hooks to keep in sync.
+  const draw = useSharedValue(0);
   const fade = useSharedValue(1);
+  const exit = useSharedValue(0);
 
   const [introDone, setIntroDone] = useState(false);
   const [started, setStarted] = useState(false);
-  // Each letter animates itself off this, so no shared value crosses into Letter
-  const [wordMode, setWordMode] = useState<'idle' | 'animate' | 'instant'>('idle');
+  const [wordMode, setWordMode] = useState<'idle' | 'animate'>('idle');
+  // Reduced motion softens this screen; it no longer skips it. See below.
+  const [gentle, setGentle] = useState(false);
 
   const start = useCallback(async () => {
     if (started) return;
@@ -76,67 +89,48 @@ export default function AnimatedSplash({
     // Hand over from the native (static) splash to this animated one
     await SplashScreen.hideAsync().catch(() => {});
 
+    /**
+     * The draw plays whatever the system Reduce Motion setting says — it is
+     * the one animation in the app that does.
+     *
+     * The usual reading of reduced motion is "fewer and gentler, not zero",
+     * and a stroke drawing itself in place is the gentle kind: no travel
+     * across the screen, no parallax, no scale, nothing that moves the eye.
+     * What reduced motion does suppress here is the letters sliding up and
+     * the zoom on exit, which are real movement.
+     */
     const reduceMotion = await AccessibilityInfo.isReduceMotionEnabled().catch(() => false);
-    if (reduceMotion) {
-      // No motion, but still hold the finished logo long enough to register
-      for (const v of [hex, yLine, vLine, tape, line, flap]) v.value = 1;
-      setWordMode('instant');
-      setTimeout(() => setIntroDone(true), 1500);
-      return;
-    }
+    setGentle(reduceMotion);
 
-    const draw = (v: SharedValue<number>, duration: number, delay: number) => {
-      v.value = withDelay(delay, withTiming(1, { duration, easing: EASE }));
-    };
-
-    // Total intro ~4.3s: slow enough to read the logo being drawn
-    draw(hex, 1800, 200);
-    draw(yLine, 1150, 1300);
-    draw(vLine, 900, 1950);
-    draw(tape, 600, 2700);
-    draw(line, 520, 3150);
-    draw(flap, 420, 3450);
     setWordMode('animate');
+    draw.set(withTiming(1, { duration: DRAW_TOTAL, easing: EASE_OUT }));
+    setTimeout(() => setIntroDone(true), INTRO_MS);
+  }, [started, draw]);
 
-    // The pop finishes last, so it ends the intro
-    pop.value = withDelay(
-      3800,
-      withSequence(
-        withTiming(1.045, { duration: 200, easing: Easing.out(Easing.quad) }),
-        withTiming(1, { duration: 340, easing: Easing.out(Easing.quad) }, (finished) => {
-          'worklet';
-          if (finished) runOnJS(setIntroDone)(true);
-        }),
-      ),
-    );
-  }, [started, hex, yLine, vLine, tape, line, flap, pop]);
-
-  // Fade out only when the intro has played AND the app is ready
+  /**
+   * Leave once the intro has played AND the app is ready — whichever is later,
+   * so a fast boot never cuts the draw short.
+   *
+   * The mark drifts gently toward the viewer as the yellow dissolves, which
+   * hands over to the sign-in screen's yellow header rather than cutting to
+   * it. Held back under reduced motion, where the scale is the part that
+   * actually moves.
+   */
   useEffect(() => {
     if (!introDone || !isReady) return;
-    // Smooth exit: the logo gently zooms toward you while the splash dissolves into the app
-    fade.value = withDelay(
-      350,
-      withTiming(0, { duration: 800, easing: EASE }, (finished) => {
+    exit.set(withTiming(1, { duration: EXIT_MS, easing: EASE_OUT }));
+    fade.set(
+      withTiming(0, { duration: EXIT_MS, easing: EASE_OUT }, (finished) => {
         'worklet';
-        if (finished) runOnJS(onFinish)();
+        if (finished) scheduleOnRN(onFinish);
       }),
     );
-  }, [introDone, isReady, fade, onFinish]);
+  }, [introDone, isReady, fade, exit, onFinish]);
 
-  const rootStyle = useAnimatedStyle(() => ({ opacity: fade.value }));
+  const rootStyle = useAnimatedStyle(() => ({ opacity: fade.get() }));
   const zoomStyle = useAnimatedStyle(() => ({
-    transform: [{ scale: interpolate(fade.value, [0, 1], [1.12, 1]) }],
+    transform: [{ scale: gentle ? 1 : 1 + exit.get() * 0.08 }],
   }));
-  const popStyle = useAnimatedStyle(() => ({ transform: [{ scale: pop.value }] }));
-
-  // One hook per path: strokeDashoffset walks from the full length down to 0
-  const hexProps = useAnimatedProps(() => ({ strokeDashoffset: LEN.hex * (1 - hex.value) }));
-  const yProps = useAnimatedProps(() => ({ strokeDashoffset: LEN.y * (1 - yLine.value) }));
-  const vProps = useAnimatedProps(() => ({ strokeDashoffset: LEN.v * (1 - vLine.value) }));
-  const tapeProps = useAnimatedProps(() => ({ strokeDashoffset: LEN.tape * (1 - tape.value) }));
-  const lineProps = useAnimatedProps(() => ({ strokeDashoffset: LEN.line * (1 - line.value) }));
-  const flapProps = useAnimatedProps(() => ({ opacity: flap.value }));
 
   return (
     <Reanimated.View
@@ -146,54 +140,16 @@ export default function AnimatedSplash({
       pointerEvents="none"
       style={[StyleSheet.absoluteFill, styles.root, { backgroundColor: background }, rootStyle]}
     >
-      <Reanimated.View style={[{ width: size, height: size }, zoomStyle]}>
-        <Reanimated.View style={[StyleSheet.absoluteFill, popStyle]}>
-          <Svg width={size} height={size} viewBox="0 0 1000 1000">
-            <G fill="none" stroke={ink} strokeLinejoin="miter" strokeLinecap="butt">
-              <AnimatedPath
-                strokeWidth={33}
-                d="M471 384 L646 449 L646 625 L471 691 L298 625 L298 449 Z"
-                strokeDasharray={[LEN.hex, LEN.hex]}
-                animatedProps={hexProps}
-              />
-              <AnimatedPath
-                strokeWidth={32}
-                d="M298 449 L473 509 L646 449"
-                strokeDasharray={[LEN.y, LEN.y]}
-                animatedProps={yProps}
-              />
-              <AnimatedPath
-                strokeWidth={32}
-                d="M473 509 L473 691"
-                strokeDasharray={[LEN.v, LEN.v]}
-                animatedProps={vProps}
-              />
-              <AnimatedPath
-                strokeWidth={30}
-                d="M440 397 L566 450"
-                strokeDasharray={[LEN.tape, LEN.tape]}
-                animatedProps={tapeProps}
-              />
-              <AnimatedPath
-                strokeWidth={7}
-                stroke={background}
-                d="M463 390 L600 442"
-                strokeDasharray={[LEN.line, LEN.line]}
-                animatedProps={lineProps}
-              />
-              <AnimatedPath
-                fill={ink}
-                stroke="none"
-                d="M546 452 L576 440 L576 511 L546 525 Z"
-                animatedProps={flapProps}
-              />
-            </G>
-          </Svg>
-        </Reanimated.View>
+      <Reanimated.View style={[styles.stack, zoomStyle]}>
+        <Svg width={size} height={size} viewBox={LOGO_VIEWBOX} fill="none">
+          {LOGO_PATHS.map((p, i) => (
+            <Stroke key={p.label} path={p} index={i} draw={draw} ink={ink} />
+          ))}
+        </Svg>
 
-        <View style={[styles.word, { top: 718 * s }]}>
+        <View style={styles.word}>
           {WORD.map((ch, i) => (
-            <Letter key={i} ch={ch} index={i} mode={wordMode} ink={ink} scale={s} />
+            <Letter key={i} ch={ch} index={i} mode={wordMode} ink={ink} gentle={gentle} />
           ))}
         </View>
       </Reanimated.View>
@@ -202,58 +158,88 @@ export default function AnimatedSplash({
 }
 
 /**
- * Its own component so each letter can call hooks; hooks inside the map above
- * would be a loop.
+ * One stroke of the mark. Its own component so each can hold a hook — hooks
+ * inside the map above would be a loop.
  */
+function Stroke({
+  path,
+  index,
+  draw,
+  ink,
+}: {
+  path: (typeof LOGO_PATHS)[number];
+  index: number;
+  draw: SharedValue<number>;
+  ink: string;
+}) {
+  // Each path consumes its own slice of the shared 0->1 progress, so they
+  // overlap instead of queueing.
+  const from = (index * DRAW_STAGGER) / DRAW_TOTAL;
+  const span = DRAW_MS / DRAW_TOTAL;
+
+  const animatedProps = useAnimatedProps(() => {
+    const local = Math.min(1, Math.max(0, (draw.get() - from) / span));
+    return { strokeDashoffset: path.length * (1 - local) };
+  });
+
+  return (
+    <AnimatedPath
+      d={path.d}
+      stroke={ink}
+      strokeWidth={LOGO_STROKE_WIDTH}
+      strokeLinejoin="round"
+      strokeLinecap="round"
+      strokeDasharray={[path.length, path.length]}
+      animatedProps={animatedProps}
+    />
+  );
+}
+
 function Letter({
   ch,
   index,
   mode,
   ink,
-  scale,
+  gentle,
 }: {
-  ch: string
-  index: number
-  mode: 'idle' | 'animate' | 'instant'
-  ink: string
-  scale: number
+  ch: string;
+  index: number;
+  mode: 'idle' | 'animate';
+  ink: string;
+  /** Reduced motion: fade the letter up in place, don't slide it. */
+  gentle: boolean;
 }) {
   const v = useSharedValue(0);
 
   useEffect(() => {
-    if (mode === 'instant') {
-      v.value = 1;
-    } else if (mode === 'animate') {
-      v.value = withDelay(
+    if (mode !== 'animate') return;
+    v.set(
+      withDelay(
         LETTER_FROM + index * LETTER_STAGGER,
-        withTiming(1, { duration: LETTER_MS, easing: Easing.out(Easing.cubic) }),
-      );
-    }
+        withTiming(1, { duration: LETTER_MS, easing: EASE_OUT }),
+      ),
+    );
   }, [mode, index, v]);
 
   const style = useAnimatedStyle(() => ({
-    opacity: v.value,
-    transform: [{ translateY: (1 - v.value) * 22 * scale }],
+    opacity: v.get(),
+    transform: [{ translateY: gentle ? 0 : (1 - v.get()) * 10 }],
   }));
 
-  return (
-    <Reanimated.Text
-      style={[
-        {
-          color: ink,
-          fontSize: 70 * scale,
-          fontWeight: '500',
-          letterSpacing: -0.3 * scale,
-        },
-        style,
-      ]}
-    >
-      {ch}
-    </Reanimated.Text>
-  );
+  return <Reanimated.Text style={[styles.letter, { color: ink }, style]}>{ch}</Reanimated.Text>;
 }
 
 const styles = StyleSheet.create({
   root: { alignItems: 'center', justifyContent: 'center', zIndex: 999, elevation: 999 },
-  word: { position: 'absolute', left: 0, right: 0, flexDirection: 'row', justifyContent: 'center' },
+  stack: { alignItems: 'center', gap: 20 },
+  word: { flexDirection: 'row' },
+  letter: {
+    // The real brand face, not the system fallback the old splash used. The
+    // root layout holds this screen up until the fonts have loaded, so it is
+    // always available by the time anything renders here.
+    fontFamily: fonts.extrabold,
+    fontSize: 30,
+    lineHeight: 36,
+    letterSpacing: -0.8,
+  },
 });

@@ -3,11 +3,14 @@ import Product from "../domain/Product";
  *
  * Input:
  *   {
+ *     id?: string,            // the caller may pick the id (must be a uuid to sync)
  *     name: string,
  *     sku?: string,
  *     unit: string,
  *     isComposite: boolean,
- *     sellingPrice: number,
+ *     sellingPrice?: number,  // omit for ingredients (stored as 0)
+ *     meta?: object,          // v2-only fields: family, menu, variant, size, priceOptions,
+ *                             // untracked, sellable, detail, icon, unitPlural, packLabel, cost
  *     category?: string,
  *     packSize?: number,
  *     openingStock?: number,
@@ -22,7 +25,7 @@ export function createCreateProductUseCase({ productRepository }) {
     if (!input.name || !input.unit) {
       return { success: false, errors: ["name and unit are required"] };
     }
-    if (input.sellingPrice == null || input.sellingPrice < 0) {
+    if (input.sellingPrice != null && !(input.sellingPrice >= 0)) {
       return {
         success: false,
         errors: ["sellingPrice must be a non-negative number"],
@@ -36,12 +39,13 @@ export function createCreateProductUseCase({ productRepository }) {
     }
 
     const product = new Product({
-      id: crypto.randomUUID(),
+      id: input.id ?? crypto.randomUUID(),
       name: input.name,
       sku: input.sku,
       unit: input.unit,
       isComposite: input.isComposite,
-      sellingPrice: input.sellingPrice,
+      sellingPrice: input.sellingPrice ?? 0,
+      meta: input.meta,
       category: input.category ?? null,
       packSize: input.packSize ?? 1,
       openingStock: input.openingStock ?? 0,

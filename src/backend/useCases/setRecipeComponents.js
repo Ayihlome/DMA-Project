@@ -7,8 +7,9 @@ import RecipeComponent from "../domain/Recipe";
  * Input:
  *   {
  *     parentProductID: string,
- *     components: [{ componentProductID: string, quantityRequired: number }]
- *   }
+ *     components: [{ componentProductID: string, quantityRequired: number }],
+ *     allowEmpty?: boolean   // true clears the recipe (a made-to-order item can sell without one)
+ * }
  *
  * Output (success): { success: true }
  * Output (failure): { success: false, errors: string[] }
@@ -35,14 +36,14 @@ export function createSetRecipeComponentsUseCase({
       };
     }
 
-    if (!input.components || input.components.length === 0) {
+    if (!input.components?.length && !input.allowEmpty) {
       return {
         success: false,
         errors: ["At least one component is required"],
       };
     }
 
-    for (const component of input.components) {
+    for (const component of input.components ?? []) {
       const componentProduct = await productRepository.getByID(
         component.componentProductID,
       );
@@ -63,7 +64,7 @@ export function createSetRecipeComponentsUseCase({
       }
     }
 
-    const components = input.components.map(
+    const components = (input.components ?? []).map(
       (c) =>
         new RecipeComponent({
           id: crypto.randomUUID(),

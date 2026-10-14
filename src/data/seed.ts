@@ -5,6 +5,8 @@ const photo = (id: string) => `https://images.unsplash.com/${id}?auto=format&fit
 export const PRODUCTS: Product[] = [
   {
     id: 'bread',
+    family: 'bread',
+    variant: 'Albany',
     name: 'White Bread 700g',
     detail: 'Albany, sliced',
     category: 'bakery',
@@ -37,6 +39,9 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: 'coke',
+    family: 'colddrink',
+    variant: 'Coke',
+    size: 'can',
     name: 'Coca-Cola 330ml',
     detail: 'Cold drink, can',
     category: 'beverages',
@@ -53,6 +58,7 @@ export const PRODUCTS: Product[] = [
   },
   {
     id: 'kota',
+    menu: 'Kota',
     name: 'Kota Special',
     detail: 'Quarter loaf, chips, polony, cheese',
     category: 'hot',
@@ -187,6 +193,122 @@ export const PRODUCTS: Product[] = [
   },
 ]
 
+// ---------------------------------------------------------------------------
+// Family variants for the Sell grid's pickers. Demo data only: real shops get
+// these through a one-time opt-in, never added behind their back.
+// ---------------------------------------------------------------------------
+
+const breadVariant = (id: string, variant: string, name: string, price: number, stock: number): Product => ({
+  id,
+  name,
+  detail: `${variant}, sliced`,
+  category: 'bakery',
+  icon: 'bakery_dining',
+  sellable: true,
+  price,
+  cost: Math.round(price * 0.78 * 100) / 100,
+  unit: 'loaf',
+  unitPlural: 'loaves',
+  stock,
+  packSize: 10,
+  packLabel: 'crate of 10',
+  family: 'bread',
+  variant,
+})
+
+const SIZES = [
+  { size: 'can', label: '330ml can', price: 13, unit: 'can', units: 'cans', pack: 24, packLabel: 'tray of 24' },
+  { size: '500ml', label: '500ml', price: 16, unit: 'bottle', units: 'bottles', pack: 12, packLabel: 'pack of 12' },
+  { size: '2L', label: '2L', price: 28, unit: 'bottle', units: 'bottles', pack: 6, packLabel: 'pack of 6' },
+] as const
+
+const drink = (brand: string, sizeIndex: number, stock: number): Product => {
+  const z = SIZES[sizeIndex]
+  return {
+    id: `${brand.toLowerCase()}-${z.size.toLowerCase()}`,
+    name: `${brand} ${z.label}`,
+    detail: 'Cold drink',
+    category: 'beverages',
+    icon: 'local_bar',
+    sellable: true,
+    price: z.price,
+    cost: Math.round(z.price * 0.7 * 100) / 100,
+    unit: z.unit,
+    unitPlural: z.units,
+    stock,
+    packSize: z.pack,
+    packLabel: z.packLabel,
+    family: 'colddrink',
+    variant: brand,
+    size: z.size,
+  }
+}
+
+const AIRTIME_AMOUNTS = [5, 10, 12, 29, 50]
+
+const airtime = (network: string): Product => ({
+  id: `airtime-${network.toLowerCase().replace(/\s+/g, '')}`,
+  name: `${network} airtime`,
+  detail: 'Voucher',
+  category: 'other',
+  icon: 'sell',
+  sellable: true,
+  // The amount picked at the counter becomes the line price
+  price: AIRTIME_AMOUNTS[0],
+  cost: 0,
+  unit: 'voucher',
+  unitPlural: 'vouchers',
+  stock: 0,
+  packSize: 1,
+  packLabel: 'voucher',
+  family: 'airtime',
+  variant: network,
+  priceOptions: AIRTIME_AMOUNTS,
+  untracked: true,
+})
+
+/** A second kota so the Kota tile has a choice. Same ingredients as Kota Special, lighter. */
+const CHIP_KOTA: Product = {
+  id: 'kota-chip',
+  name: 'Chip Kota',
+  detail: 'Quarter loaf, chips, atchar',
+  category: 'hot',
+  icon: 'lunch_dining',
+  sellable: true,
+  price: 20,
+  cost: 0,
+  unit: 'kota',
+  unitPlural: 'kotas',
+  stock: 0,
+  packSize: 1,
+  packLabel: 'made to order',
+  composite: true,
+  recipe: [
+    { productId: 'bread', qty: 0.25 },
+    { productId: 'chips', qty: 0.15 },
+  ],
+  menu: 'Kota',
+}
+
+PRODUCTS.push(
+  breadVariant('bread-blueribbon', 'Blue Ribbon', 'Blue Ribbon White 700g', 18, 6),
+  breadVariant('bread-sasko', 'Sasko', 'Sasko White 700g', 17.5, 0),
+  breadVariant('bread-brown', 'Brown', 'Brown Bread 700g', 16, 9),
+  drink('Coke', 1, 18),
+  drink('Coke', 2, 7),
+  drink('Fanta', 0, 30),
+  drink('Fanta', 1, 10),
+  drink('Fanta', 2, 4),
+  drink('Sprite', 0, 22),
+  drink('Sprite', 1, 0),
+  drink('Sprite', 2, 3),
+  airtime('Vodacom'),
+  airtime('MTN'),
+  airtime('Cell C'),
+  airtime('Telkom'),
+  CHIP_KOTA,
+)
+
 export const SUPPLIERS: Supplier[] = [
   { id: 'jumbo', name: 'Jumbo Cash & Carry', location: 'Crown Mines · 4.2 km', contact: '011 555 0142' },
   { id: 'devland', name: 'Devland Mega Wholesale', location: 'Devland · 3.8 km' },
@@ -318,5 +440,8 @@ export function createSeedState(now = Date.now()): AppState {
     profile: { ownerName: 'Saii', storeName: "Saii's Spaza", role: 'Owner', memberSince: new Date(2024, 2, 1).getTime() },
     queue: [],
     lastSyncedAt: now - 2 * 60_000,
+    // Explicitly not onboarded, which is not the same as the field being
+    // missing — see AppState.onboardedAt
+    onboardedAt: null,
   }
 }

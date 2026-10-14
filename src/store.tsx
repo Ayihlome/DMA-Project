@@ -1,10 +1,11 @@
-import { createContext, useCallback, useContext, useEffect, useMemo, useRef, useState, type ReactNode } from 'react'
+import { createContext, useCallback, useContext, useEffect, useLayoutEffect, useMemo, useRef, useState, type ReactNode } from 'react'
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { actions as A, createSeedState, type AppState, type StoreApi } from './core'
 import { fetchBackup, pushBackup, type BackupStatus } from './lib/cloudBackup'
 
-const StoreContext = createContext<StoreApi | null>(null)
+// Exported so a second store (src/data/sqliteStore.tsx) can feed the same useStore()
+export const StoreContext = createContext<StoreApi | null>(null)
 
 async function load<T>(key: string): Promise<T | null> {
   try {
@@ -35,10 +36,17 @@ export function StoreProvider({
   const [photos, setPhotos] = useState<Record<string, string>>({})
   const [online, setOnline] = useState(true)
   const [backupStatus, setBackupStatus] = useState<BackupStatus>('idle')
+  // The latest state for event handlers (recording a sale, saving a product),
+  // which run outside render. Updated after each commit rather than during
+  // render: writing a ref mid-render is unsafe once React can re-run renders,
+  // and a layout effect runs before anything can be tapped, so handlers never
+  // see a stale value.
   const ref = useRef(state)
-  ref.current = state
   const photosRef = useRef(photos)
-  photosRef.current = photos
+  useLayoutEffect(() => {
+    ref.current = state
+    photosRef.current = photos
+  }, [state, photos])
   // Hydration assigns state once; that assignment must not trigger an upload of
   // what was just downloaded.
   const skipNextPush = useRef(true)
@@ -64,12 +72,14 @@ export function StoreProvider({
       // State left by a different account must never be adopted by this one.
       const mine = savedOwner === null || savedOwner === ownerId
       if (A.isValidState(saved) && mine) {
-        setState(saved)
+        // Saved before onboarding existed? Decide once, here, rather than
+        // sending a shop that is already running through setup again.
+        setState(A.migrateState(saved))
         setPhotos(savedPhotos ?? {})
       } else {
         const restored = await fetchBackup()
         if (!alive) return
-        setState(restored ?? createSeedState())
+        setState(restored ? A.migrateState(restored) : createSeedState())
         // Photos are device-only, so there is nothing to restore for another account
         setPhotos(mine ? (savedPhotos ?? {}) : {})
         if (!mine) AsyncStorage.removeItem(A.PHOTO_KEY).catch(() => {})
@@ -119,9 +129,9 @@ export function StoreProvider({
   const update = useCallback((fn: (s: AppState) => AppState) => setState((s) => s && fn(s)), [])
 
   const recordSale = useCallback<StoreApi['recordSale']>(
-    (lines) => {
-      const check = A.recordSale(ref.current!, lines)
-      if (check.ok) update((s) => A.recordSale(s, lines).state ?? s)
+    (lines, meta) => {
+      const check = A.recordSale(ref.current!, lines, meta)
+      if (check.ok) update((s) => A.recordSale(s, lines, meta).state ?? s)
       return { ok: check.ok, message: check.message } as A.Result
     },
     [update],
@@ -179,11 +189,40 @@ export function StoreProvider({
         addProduct,
         updateProduct: (id, input) => update((s) => A.updateProduct(s, id, input)),
         receivePurchase: (id) => update((s) => A.receivePurchase(s, id)),
+        // Planned against the latest state (for the ids), committed functionally
+        receiveRestock: (lines) => {
+          const clean = lines.filter((l) => l.qty > 0)
+          if (!clean.length) return []
+          const created = A.planOrders(ref.current!, clean)
+          update((s) => A.receivePlanned(s, created))
+          return created.map((po) => po.id)
+        },
+        undoRestock: (ids) => update((s) => A.undoRestock(s, ids)),
+        setRestockDay: (day) => update((s) => A.setRestockDay(s, day)),
+        voidSale: (saleId) => update((s) => A.voidSale(s, saleId)),
         cancelPurchase: (id) => update((s) => A.cancelPurchase(s, id)),
         upsertSupplierPrice: (input) => update((s) => A.upsertSupplierPrice(s, input)),
         setPreferredSupplier: (productId, supplierId) => update((s) => A.setPreferredSupplier(s, productId, supplierId)),
         setBudget: (n) => update((s) => A.setBudget(s, n)),
         updateProfile: (p) => update((s) => A.updateProfile(s, p)),
+        finishOnboarding: (sel, profile, counts) => update((s) => A.applyStarterPacks(s, sel, profile, counts)),
+        skipOnboarding: (profile) => update((s) => A.skipOnboarding(s, profile)),
+        setStockCounts: (counts) => update((s) => A.setStockCounts(s, counts)),
+        updateSellGrid: (patch) => update((s) => A.updateSellGrid(s, patch)),
+        // Same pattern as addProduct: build once (so the caller gets the exact
+        // product back), then commit with a functional update so two calls in
+        // one tap can't overwrite each other
+        saveMenuItem: (input, id) => {
+          const product = A.buildMenuItem(ref.current!, input, id)
+          update((s) => A.upsertProduct(s, product))
+          return product
+        },
+        removeMenuItem: (id) => update((s) => A.removeMenuItem(s, id)),
+        addIngredient: (input) => {
+          const product = A.buildIngredient(input)
+          update((s) => A.upsertProduct(s, product))
+          return product
+        },
         setPhoto,
         removePhoto,
         resetDemoData: () => setState(createSeedState()),
@@ -193,7 +232,9 @@ export function StoreProvider({
 
   // Nobody is signed in: the auth screens need no store and must not be blocked
   if (!ownerId) return <>{children}</>
-  if (!value) return <>{fallback}</>
+  // `value` is `state && {…}`, so this is the same test — on the plain state,
+  // not on the object of handlers
+  if (!state) return <>{fallback}</>
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }
 
@@ -201,4 +242,14 @@ export function useStore() {
   const ctx = useContext(StoreContext)
   if (!ctx) throw new Error('useStore must be used inside <StoreProvider>')
   return ctx
+}
+
+/**
+ * The store if there is one, null if nobody is signed in.
+ *
+ * Only the root navigator needs this: it renders on both sides of the auth
+ * guard, and signed out there is deliberately no store to read.
+ */
+export function useStoreOptional() {
+  return useContext(StoreContext)
 }

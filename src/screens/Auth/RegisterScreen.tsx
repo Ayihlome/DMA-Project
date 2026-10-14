@@ -1,14 +1,14 @@
 import React, { useState } from 'react'
-import { Text, View, TouchableOpacity } from 'react-native'
+import { Text, View } from 'react-native'
 import { router, Link } from 'expo-router'
-import MaterialIcons from '../../components/common/MaterialIcon'
-import { colors } from '../../theme/theme'
+import Checkbox from '../../components/ui/Checkbox'
 import { supabase } from '../../lib/supabase'
 import { AuthLayout, Field, SubmitButton } from './AuthForm'
 import { styles } from './styles'
 
 export default function RegisterScreen() {
   const [fullName, setFullName] = useState('')
+  const [shopName, setShopName] = useState('')
   const [email, setEmail] = useState('')
   const [password, setPassword] = useState('')
   const [confirm, setConfirm] = useState('')
@@ -17,8 +17,8 @@ export default function RegisterScreen() {
   const [error, setError] = useState<string | null>(null)
 
   async function register() {
-    if (!fullName.trim() || !email.trim() || !password) {
-      setError('Fill in your name, email and password.')
+    if (!fullName.trim() || !shopName.trim() || !email.trim() || !password) {
+      setError('Fill in your name, your shop name, email and password.')
       return
     }
     if (password.length < 6) {
@@ -42,7 +42,13 @@ export default function RegisterScreen() {
     const { data, error } = await supabase.auth.signUp({
       email: email.trim(),
       password,
-      options: { data: { full_name: fullName.trim(), consent_at: new Date().toISOString() } },
+      options: {
+        data: {
+          full_name: fullName.trim(),
+          shop_name: shopName.trim(),
+          consent_at: new Date().toISOString(),
+        },
+      },
     })
     setLoading(false)
 
@@ -62,6 +68,7 @@ export default function RegisterScreen() {
       switchText="Already have an account?"
       switchLabel="Sign in"
       switchHref="/sign-in"
+      segment="register"
     >
       {error && <Text style={styles.error}>{error}</Text>}
       <Field
@@ -71,6 +78,14 @@ export default function RegisterScreen() {
         placeholder="Bongani Dlamini"
         autoComplete="name"
         textContentType="name"
+      />
+      <Field
+        label="Shop name"
+        value={shopName}
+        onChangeText={setShopName}
+        placeholder="Bongani's Spaza"
+        autoComplete="organization"
+        textContentType="organizationName"
       />
       <Field
         label="Email"
@@ -86,7 +101,7 @@ export default function RegisterScreen() {
         label="Password"
         value={password}
         onChangeText={setPassword}
-        placeholder="At least 6 characters"
+        hint="At least 6 characters"
         secureTextEntry
         autoComplete="new-password"
         textContentType="newPassword"
@@ -102,23 +117,19 @@ export default function RegisterScreen() {
         onSubmitEditing={register}
       />
       <View style={styles.consentRow}>
-        <TouchableOpacity
-          onPress={() => setConsent(c => !c)}
-          accessibilityRole="checkbox"
-          accessibilityState={{ checked: consent }}
+        <Checkbox
+          checked={consent}
+          onToggle={() => setConsent(c => !c)}
           accessibilityLabel="Agree to the privacy notice"
-          style={[styles.checkbox, consent && styles.checkboxOn]}
-        >
-          {consent && <MaterialIcons name="check" size={16} color={colors.onPrimary} />}
-        </TouchableOpacity>
+        />
         <Text style={styles.consentText}>
-          I agree that StockMate may store my shop&apos;s stock and sales data to run the app.{' '}
+          I agree that StockEvo may store my shop&apos;s stock and sales data to run the app.{' '}
           <Link href="/privacy">
             <Text style={styles.consentLink}>Read the privacy notice</Text>
           </Link>
         </Text>
       </View>
-      <SubmitButton label="Create account" loading={loading} onPress={register} />
+      <SubmitButton label="Create account" loading={loading} onPress={register} disabled={!consent} />
     </AuthLayout>
   )
 }

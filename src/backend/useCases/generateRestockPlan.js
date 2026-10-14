@@ -1,4 +1,16 @@
+/**
+ * Input:  { budget?: number, refreshSnapshots?: boolean }   // refresh defaults to true
+ * Output: {
+ *   recommendations: RestockRecommendation[]   // most urgent first, items with a saved price
+ *     each also carries:
+ *       options: { supplierId, supplierName, unitPrice, minOrderQty }[]  // cheapest first
+ *       daysOfStockRemaining: number | null
+ *       salesVelocity: number                                           // units per day
+ *   budgetStatus: { spent, remaining, percentUsed, withinBudget }
+ * }
+ */
 export function createGenerateRestockPlanUseCase({
+  kpiCalculator,
   restockEngine,
   kpiSnapshotRepository,
   supplierPriceRepository,
@@ -6,6 +18,16 @@ export function createGenerateRestockPlanUseCase({
   stockRepository,
 }) {
   return async function generateRestockPlan(input) {
+    // The plan reads the KPI snapshots, so bring them up to date with the latest sales first.
+    if (kpiCalculator && input?.refreshSnapshots !== false) {
+      const all = await productRepository.getAll();
+      await Promise.all(
+        all
+          .filter((p) => !p.is_composite)
+          .map((p) => kpiCalculator.generateSnapshot(p.id)),
+      );
+    }
+
     const rawSnapshots = await kpiSnapshotRepository.getAllSnapshots();
 
     const products = (
@@ -90,6 +112,14 @@ export function createGenerateRestockPlanUseCase({
         fitsBudget ? cart : proposedCart,
         budget,
       );
+
+      recommendation.options = supplierResult.comparisons.map(
+        (c) => c.supplier,
+      );
+      recommendation.daysOfStockRemaining =
+        item.kpiSnapshot.daysOfStockRemaining ?? null;
+      recommendation.salesVelocity =
+        Number(item.kpiSnapshot.salesVelocity) || 0;
 
       recommendations.push(recommendation);
     }

@@ -1,10 +1,11 @@
 // import RecipeComponent from "domain/recipe.js"
 
 class StockUpdateResult {
-  constructor(success, deductions = [], errors = []) {
+  constructor(success, deductions = [], errors = [], noRecipe = false) {
     this.success = success;
     this.deductions = deductions;
     this.errors = errors;
+    this.noRecipe = noRecipe; // the product has no recipe components at all
   }
 }
 class RecipeEngine {
@@ -17,7 +18,8 @@ class RecipeEngine {
     return this.recipeRepository.getComponentsByParentProductId(productID);
   }
 
-  async previewDeductions(saleLineItem) {
+  // { checkStock: false } skips the stock check, for shops that never block a sale at 0
+  async previewDeductions(saleLineItem, { checkStock = true } = {}) {
     // 1. we get the components of the item
     const components = await this.resolveComposite(saleLineItem.productID);
 
@@ -27,6 +29,7 @@ class RecipeEngine {
         false,
         [],
         ["No recipe components found for product"],
+        true,
       );
     }
 
@@ -47,7 +50,7 @@ class RecipeEngine {
     }));
 
     //3. Validate before stock changes
-    for (const deduction of deductions) {
+    for (const deduction of checkStock ? deductions : []) {
       const valid = await this.checkStock(
         deduction.productID,
         deduction.quantity,

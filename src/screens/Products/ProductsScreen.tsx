@@ -1,73 +1,97 @@
-import React from 'react'
-import { View, Text, ScrollView, TouchableOpacity } from 'react-native'
+import React, { useMemo, useState } from 'react'
+import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { router } from 'expo-router'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
-import MaterialIcons from '../../components/common/MaterialIcon'
-import { colors } from '../../theme/theme'
+import ListRow from '../../components/ui/ListRow'
+import PrimaryButton from '../../components/ui/PrimaryButton'
 import { useStore } from '../../store'
-import { available } from '../../data/inventory'
+import { unitQty } from '../../data/inventory'
 import type { Product } from '../../data/types'
-import { styles } from './styles'
+import { colors, fonts, money, space, type } from '../../theme/tokens'
+import MenuItemSheet, { type MenuEdit } from '../Menu/MenuItemSheet'
 
-const rand = (n: number) => `R${n.toFixed(2)}`
+const SIDE = 28
 
-function statusText(state: Parameters<typeof available>[0], p: Product) {
+/** The one muted line under a product: what it sells for and how many are left. */
+function detailFor(p: Product) {
   if (p.composite) {
-    if (!p.recipe || p.recipe.length === 0) return { text: 'Needs a recipe', warn: true }
-    return { text: 'Made to order' }
+    // A made-to-order item with no ingredients sells but deducts nothing — say so
+    return p.recipe?.length ? `${money(p.price)} · made to order` : `${money(p.price)} · no ingredients yet`
   }
-  const qty = available(state, p)
-  return { text: `${qty} in stock`, warn: qty < 5 }
+  // An ingredient has no selling price, so R0,00 would be a lie; its cost is what matters
+  if (!p.sellable) return `Costs ${money(p.cost)} per ${p.unit}${p.untracked ? '' : ` · ${unitQty(p, p.stock)} left`}`
+  if (p.untracked) return `${money(p.price)} · not counted`
+  return `${money(p.price)} · ${p.stock < 0 ? `sold ${unitQty(p, -p.stock)} past zero` : `${unitQty(p, p.stock)} left`}`
 }
 
+/**
+ * Every product the shop has, as plain rows: what you sell first, then the
+ * ingredients that go into made-to-order food. Ingredients are listed because
+ * their cost is what a kota's margin is worked out from — hidden, they'd be
+ * numbers nothing could edit.
+ */
 export default function ProductsScreen() {
   const insets = useSafeAreaInsets()
   const { state } = useStore()
-  const products = [...state.products]
-    .filter(p => p.sellable)
-    .sort((a, b) => a.name.localeCompare(b.name))
+
+  const { sold, ingredients } = useMemo(() => {
+    const byName = (a: Product, b: Product) => a.name.localeCompare(b.name)
+    return {
+      sold: state.products.filter((p) => p.sellable).sort(byName),
+      ingredients: state.products.filter((p) => !p.sellable).sort(byName),
+    }
+  }, [state.products])
+
+  const [menuEdit, setMenuEdit] = useState<MenuEdit | null>(null)
+
+  const open = (id: string) => router.push({ pathname: '/products/[id]', params: { id } })
+  /** Food opens its ingredients editor here, instead of sending the owner off to Sell. */
+  const openRow = (p: Product) => (p.composite ? setMenuEdit({ group: p.menu ?? '', product: p }) : open(p.id))
+
+  const section = (title: string, list: Product[]) =>
+    list.length ? (
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle} accessibilityRole="header">
+          {title}
+        </Text>
+        {list.map((p, i) => (
+          <ListRow key={p.id} title={p.name} detail={detailFor(p)} onPress={() => openRow(p)} last={i === list.length - 1} />
+        ))}
+      </View>
+    ) : null
 
   return (
-    <ScrollView style={styles.screen} contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 24 }]}>
-      <View style={styles.inner}>
-        <TouchableOpacity style={styles.addBtn} onPress={() => router.push({ pathname: '/products/[id]', params: { id: 'new' } })} activeOpacity={0.85}>
-          <MaterialIcons name="add" size={20} color={colors.onPrimary} />
-          <Text style={styles.addText}>Add a product</Text>
-        </TouchableOpacity>
+    <View style={styles.screen}>
+      <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
+        {sold.length + ingredients.length === 0 ? (
+          <Text style={styles.empty}>No products yet. Add the first thing you sell.</Text>
+        ) : null}
+        {section('What you sell', sold)}
+        {section('Ingredients', ingredients)}
+      </ScrollView>
 
-        {products.length === 0 && (
-          <Text style={styles.hint}>No products yet. Add the first thing you sell.</Text>
-        )}
-
-        {products.length > 0 && (
-          <View style={styles.list}>
-            {products.map((p, i) => {
-              const s = statusText(state, p)
-              return (
-                <TouchableOpacity
-                  key={p.id}
-                  style={[styles.row, i === 0 && styles.rowFirst]}
-                  onPress={() => router.push({ pathname: '/products/[id]', params: { id: p.id } })}
-                  activeOpacity={0.7}
-                  accessibilityLabel={`Edit ${p.name}`}
-                >
-                  <View style={styles.rowIcon}>
-                    <MaterialIcons name="inventory_2" size={20} color={colors.primary} />
-                  </View>
-                  <View style={styles.rowText}>
-                    <Text style={styles.rowName} numberOfLines={1}>{p.name}</Text>
-                    <Text style={styles.rowMeta} numberOfLines={1}>
-                      {p.unit} · {rand(p.price)}
-                    </Text>
-                  </View>
-                  <Text style={[styles.rowStatus, s.warn && styles.rowWarn]}>{s.text}</Text>
-                  <MaterialIcons name="chevron_right" size={20} color={colors.textSecondary} />
-                </TouchableOpacity>
-              )
-            })}
-          </View>
-        )}
+      <View style={[styles.bar, { paddingBottom: insets.bottom + space.lg }]}>
+        <PrimaryButton label="Add a product" onPress={() => open('new')} />
       </View>
-    </ScrollView>
+
+      <MenuItemSheet edit={menuEdit} onSaved={() => {}} onClose={() => setMenuEdit(null)} />
+    </View>
   )
 }
+
+const styles = StyleSheet.create({
+  screen: { flex: 1, backgroundColor: colors.surface },
+  scroll: { paddingHorizontal: SIDE, paddingTop: space.sm },
+  section: { marginTop: space.lg },
+  sectionTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.quiet, marginBottom: 2 },
+  empty: { ...type.body, color: colors.quiet, paddingTop: space.xl },
+  bar: {
+    position: 'absolute',
+    left: 0,
+    right: 0,
+    bottom: 0,
+    paddingHorizontal: SIDE,
+    paddingTop: space.md,
+    backgroundColor: colors.surface,
+  },
+})

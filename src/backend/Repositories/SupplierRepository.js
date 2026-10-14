@@ -10,7 +10,14 @@ class SupplierRepository {
       [supplier.id, supplier.name, supplier.contact, supplier.location, now],
     );
 
-    await enqueueSync("suppliers", supplier.id, "insert", supplier);
+    await enqueueSync("suppliers", supplier.id, "insert", {
+      id: supplier.id,
+      name: supplier.name,
+      contact: supplier.contact ?? null,
+      location: supplier.location ?? null,
+      updated_at: now,
+      is_deleted: false,
+    });
     return supplier;
   }
 

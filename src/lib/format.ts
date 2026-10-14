@@ -32,3 +32,13 @@ export function longDate(ts: number) {
 export function qty(n: number) {
   return Number.isInteger(n) ? String(n) : n.toFixed(2).replace(/0+$/, '').replace(/\.$/, '')
 }
+
+/** loaf → loaves, box → boxes, bottle → bottles; measures stay as they are (2 kg). */
+export function pluralOf(unit: string) {
+  const u = unit.trim().toLowerCase()
+  if (['kg', 'g', 'l', 'ml'].includes(u)) return u
+  if (/(s|x|ch|sh)$/.test(u)) return `${u}es`
+  if (/[^aeiou]y$/.test(u)) return `${u.slice(0, -1)}ies`
+  if (/f$/.test(u)) return `${u.slice(0, -1)}ves`
+  return `${u}s`
+}

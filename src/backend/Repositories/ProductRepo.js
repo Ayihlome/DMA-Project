@@ -24,9 +24,9 @@ class ProductRepository {
     const movementID = crypto.randomUUID();
     await db.transaction(async (tx) => {
       await tx.execute(
-        `insert into products
-         (id, name, sku, unit, is_composite, selling_price, category, pack_size, created_at, updated_at, is_deleted)
-         values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
+        ` insert into products
+           (id, name, sku, unit, is_composite, selling_price, category, pack_size, meta, created_at, updated_at, is_deleted)
+           values (?, ?, ?, ?, ?, ?, ?, ?, ?, ?, ?, 0)`,
         [
           product.id,
           product.name,
@@ -36,6 +36,7 @@ class ProductRepository {
           product.sellingPrice,
           product.category ?? null,
           product.packSize ?? 1,
+          JSON.stringify(product.meta ?? {}),
           now,
           now,
         ],
@@ -62,6 +63,7 @@ class ProductRepository {
       selling_price: product.sellingPrice,
       category: product.category ?? null,
       pack_size: product.packSize ?? 1,
+      meta: product.meta ?? {},
       created_at: now,
       updated_at: now,
       is_deleted: false,
@@ -82,12 +84,24 @@ class ProductRepository {
     const fields = Object.keys(changes);
     const setClause = fields.map((f) => `${f} = ?`).join(", ");
 
+    // meta is an object for the app and the sync payload, JSON text in SQLite
+    const toSql = (f) =>
+      f === "meta" ? JSON.stringify(changes.meta ?? {}) : changes[f];
+
     await db.execute(
       `update products set ${setClause}, updated_at = ? where id = ?`,
-      [...fields.map((f) => changes[f]), now, productID],
+      [...fields.map(toSql), now, productID],
     );
 
     await enqueueSync("products", productID, "update", changes);
+  }
+
+  // Phone-only counter (it has no column on Supabase), so nothing is queued.
+  async setSoldWithoutRecipe(productID, count) {
+    await db.execute(
+      `update products set sold_without_recipe = ? where id = ?`,
+      [count, productID],
+    );
   }
 }
 
