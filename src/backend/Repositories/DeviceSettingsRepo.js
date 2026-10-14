@@ -1,14 +1,25 @@
 import { db } from "../data/local/db";
 import { enqueueSync } from "../data/local/syncqueue";
 
+// Every key in the device_settings table that a use case reads or writes.
+// The values must match what loadShop reads, so change them in both places.
 export const SETTINGS_KEYS = {
   profile: "profile",
   onboardedAt: "onboardedAt",
   sellGrid: "sellGrid",
   budget: "budget",
-  prefferedSuppliers: "prefferedSuppliers",
-  ownerId: "ownerId",
+  preferredSuppliers: "preferred",
+  restockDay: "restockDay",
+  ownerId: "owner", // DeviceRepo.setOwner stores the signed-in account under this key
 };
+
+export const DEFAULT_SELL_GRID = {
+  order: null,
+  hidden: [],
+  lastUsed: {},
+  lastAmount: {},
+};
+
 export default class DeviceSettingsRepository {
   async get(key) {
     const result = await db.execute(
@@ -22,10 +33,10 @@ export default class DeviceSettingsRepository {
   async set(key, value) {
     await db.execute(
       `insert into device_settings (key, value, updated_at)
-      values (?, ?, ?)
-      on conflict (key) do update set 
-        value = excluded.value,
-        updated_at = excluded.updated_at`,
+       values (?, ?, ?)
+       on conflict (key) do update set
+         value = excluded.value,
+         updated_at = excluded.updated_at`,
       [key, value, new Date().toISOString()],
     );
   }
@@ -35,7 +46,7 @@ export default class DeviceSettingsRepository {
     if (value === null) return fallback;
     try {
       return JSON.parse(value);
-    } catch (error) {
+    } catch {
       return fallback;
     }
   }
@@ -44,7 +55,7 @@ export default class DeviceSettingsRepository {
     await this.set(key, JSON.stringify(object));
   }
 
-  // defaults fill anything that was not saved ^
+  // defaults fill anything that was not saved
   async mergeJSON(key, changes, defaults = {}) {
     const saved = await this.getJSON(key, {});
     const merged = { ...defaults, ...saved, ...changes };
@@ -55,12 +66,11 @@ export default class DeviceSettingsRepository {
   async updateProfile(changes) {
     const profile = await this.mergeJSON(SETTINGS_KEYS.profile, changes);
 
-    // role and memberSince not defined on profiles table, stays local
+    // role and memberSince have no column on the profiles table, so they stay on the phone
     const remote = {};
     if (changes.ownerName !== undefined)
       remote.display_name = changes.ownerName;
-    if (changes.storeName !== undefined)
-      remote.display_shop_name = changes.storeName;
+    if (changes.storeName !== undefined) remote.shop_name = changes.storeName;
 
     const ownerID = await this.get(SETTINGS_KEYS.ownerId);
     if (ownerID === null || Object.keys(remote).length === 0) {

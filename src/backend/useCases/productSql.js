@@ -10,7 +10,11 @@ export const defaultPlural = (unit) =>
   ["kg", "g", "L", "l", "ml"].includes(unit) ? unit : `${unit}s`;
 
 export const parseMeta = (raw) => {
-  try { return JSON.parse(raw ?? "{}") ?? {}; } catch { return {}; }
+  try {
+    return JSON.parse(raw ?? "{}") ?? {};
+  } catch {
+    return {};
+  }
 };
 
 /** Insert a product row inside a transaction. Returns the row for syncing. */
@@ -24,6 +28,7 @@ export async function insertProduct(tx, p, now) {
     packLabel: p.packLabel ?? null,
     ...(p.detail ? { detail: p.detail } : {}),
     ...(p.icon ? { icon: p.icon } : {}),
+    ...(p.image ? { image: p.image } : {}),
     ...(p.family ? { family: p.family, variant: p.variant } : {}),
     ...(p.size ? { size: p.size } : {}),
     ...(p.priceOptions ? { priceOptions: p.priceOptions } : {}),
@@ -53,10 +58,23 @@ export async function insertProduct(tx, p, now) {
 
 /** Merge fields into a product's meta JSON (inside a transaction). Returns the new meta. */
 export async function patchMeta(tx, id, patch) {
-  const { rows } = await tx.execute(`select meta from products where id = ?`, [id]);
+  const { rows } = await tx.execute(`select meta from products where id = ?`, [
+    id,
+  ]);
   if (rows.length === 0) throw new Error(`Product ${id} not found`);
   return { ...parseMeta(rows[0].meta), ...patch };
 }
+
+/**
+ * A product row as Supabase wants it: real booleans, and meta as an object (it is a jsonb column).
+ * SQLite keeps 0/1 and JSON text, so a row read or built locally goes through this before it is queued.
+ */
+export const toSyncProduct = (row) => ({
+  ...row,
+  is_composite: !!row.is_composite,
+  is_deleted: !!row.is_deleted,
+  meta: typeof row.meta === "string" ? parseMeta(row.meta) : (row.meta ?? {}),
+});
 
 export async function insertRecipeLine(tx, parentId, componentId, qty, now) {
   const id = crypto.randomUUID();

@@ -22,9 +22,13 @@ const ENTITY = {
   purchases: "purchase",
   supplier_prices: "supplier_price",
   profiles: "profile",
+  sale_voids: "sale",
 };
 
-export function createLoadShopUseCase({ shopReadRepository: repo }) {
+export function createLoadShopUseCase({
+  shopReadRepository: repo,
+  purchaseOrderRepository,
+}) {
   return async function loadShop() {
     const [
       products,
@@ -37,6 +41,7 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
       settings,
       ops,
       syncedAt,
+      purchaseData,
     ] = await Promise.all([
       repo.products(),
       repo.recipeComponents(),
@@ -48,6 +53,7 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
       repo.settings(),
       repo.unsyncedOps(),
       repo.lastSyncedAt(),
+      purchaseOrderRepository.all(),
     ]);
 
     const recipes = new Map();
@@ -79,6 +85,17 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
       ...(s.payment ? { payment: s.payment } : {}),
       ...(s.cash_given != null ? { cashGiven: Number(s.cash_given) } : {}),
     });
+
+    const linesByOrder = new Map();
+    for (const l of purchaseData.lines) {
+      const list = linesByOrder.get(l.purchase_order_id) ?? [];
+      list.push({
+        productId: l.product_id,
+        qty: Number(l.quantity),
+        unitPrice: Number(l.unit_price),
+      });
+      linesByOrder.set(l.purchase_order_id, list);
+    }
 
     return {
       version: 1,
@@ -138,15 +155,25 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
         ...toSale(s),
         voidedAt: ms(s.voided_at),
       })),
-      purchases: [], // filled by the order use cases (createOrderList / receivePurchase / cancelPurchase)
+      purchases: purchaseData.orders.map((o) => ({
+        id: o.id,
+        at: ms(o.created_at),
+        supplierId: o.supplier_id ?? "",
+        payment: o.payment ?? "Cash",
+        status: o.status,
+        lines: linesByOrder.get(o.id) ?? [],
+        ...(o.received_at ? { receivedAt: ms(o.received_at) } : {}),
+      })),
       preferred: json(settings.preferred, {}),
       budget: Number(settings.budget) || 0,
-      profile: json(settings.profile, {
+      profile: {
         ownerName: "",
         storeName: "",
         role: "Owner",
-        memberSince: Date.now(),
-      }),
+        // not saved yet: the shop is as old as its first product
+        memberSince: ms(products[0]?.created_at) || Date.now(),
+        ...json(settings.profile, {}),
+      },
       queue: ops.map((o) => ({
         id: o.id,
         entity: ENTITY[o.entity_type] ?? "product",
@@ -156,7 +183,13 @@ export function createLoadShopUseCase({ shopReadRepository: repo }) {
         retries: Number(o.retry_count) || 0,
       })),
       lastSyncedAt: ms(syncedAt),
-      onboardedAt: json(settings.onboardedAt, null),
+      // A shop that already has products (set up before onboarding was saved here) is not sent back through it
+      onboardedAt:
+        json(settings.onboardedAt, null) ??
+        (products.length ? Date.now() : null),
+      ...(settings.restockDay != null
+        ? { restockDay: json(settings.restockDay, undefined) }
+        : {}),
       ...(settings.sellGrid
         ? { sellGrid: json(settings.sellGrid, undefined) }
         : {}),

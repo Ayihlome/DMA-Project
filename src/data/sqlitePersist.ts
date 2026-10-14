@@ -6,8 +6,8 @@
  * sync queue, Supabase) say the same thing. It knows nothing about React, so it can be tested on
  * its own.
  *
- * Not covered here (no use case yet, kept in the phone's overlay by sqliteStore.tsx): budget,
- * profile, preferred supplier, onboarding flag, sell grid, purchase orders.
+ * Covered by their own use cases, called straight from sqliteStore.tsx: budget, profile, preferred
+ * supplier, onboarding, sell grid, restock day, orders, menu items, ingredients, voids.
  */
 import type { AppState, Product } from './types'
 import type { SaleInput, SaleMeta } from './actions'
@@ -59,7 +59,7 @@ export function uuidify(state: Pick<AppState, 'products' | 'prices' | 'preferred
   }
 }
 
-const failed = (r: { success?: boolean; errors?: string[] } | undefined, what: string) =>
+export const failed = (r: { success?: boolean; errors?: string[] } | undefined, what: string) =>
   r?.success ? [] : [`${what}: ${(r?.errors ?? ['no answer']).join(', ')}`]
 
 /** A sale. Lenient: the counter never refuses one over stock, a negative count is how an item gets flagged. */
@@ -88,25 +88,10 @@ export async function persistSale(
   if (r?.success && onSaleId) onSaleId(r.saleID)
   return failed(r, 'recordSale')
 }
+
 /** Takes a sale back: marked voided on file, its stock goes back. */
 export async function persistVoid(uc: UseCases, saleID: string) {
   return failed(await uc.voidSale({ saleID }), 'voidSale')
-}
-
-/** Stock arriving from a delivered order. */
-export async function persistReceive(uc: UseCases, lines: { productId: string; qty: number }[]) {
-  const errors: string[] = []
-  for (const l of lines) errors.push(...failed(await uc.receiveStock({ productID: l.productId, quantity: l.qty }), 'receiveStock'))
-  return errors
-}
-
-   /** Stock taken back out (Undo on a restock). May go below zero, like a sale can. */
-export async function persistUndoStock(uc: UseCases, lines: { productId: string; qty: number }[]) {
-  const errors: string[] = []
-  for (const l of lines) {
-    errors.push(...failed(await uc.adjustStock({ productID: l.productId, delta: -l.qty, reason: 'restock_undo' }), 'adjustStock'))
-  }
-  return errors
 }
 
 /**
@@ -218,39 +203,5 @@ export function emptyShop(now = Date.now()): AppState {
     queue: [],
     lastSyncedAt: 0,
     onboardedAt: null,
-  }
-}
-
-/**
- * The fields no use case stores yet. They live on the phone (AsyncStorage) until the
- * settings and order use cases exist, and are laid over what loadShop returns.
- */
-
-export type Overlay = Pick<AppState, 'purchases' | 'preferred' | 'budget' | 'profile' | 'onboardedAt' | 'sellGrid' | 'restockDay'>
-
-export const overlayOf = (s: AppState): Overlay => ({
-  purchases: s.purchases,
-  preferred: s.preferred,
-  budget: s.budget,
-  profile: s.profile,
-  onboardedAt: s.onboardedAt,
-  ...(s.sellGrid ? { sellGrid: s.sellGrid } : {}),
-  ...(s.restockDay !== undefined ? { restockDay: s.restockDay } : {}),
-})
-
-export function withOverlay(shop: AppState, overlay: Overlay | null, now = Date.now()): AppState {
-  if (!overlay) {
-    // A shop that already has products (set up before this store existed) must not be sent through onboarding again
-    return { ...shop, onboardedAt: shop.products.length ? now : null }
-  }
-  return {
-    ...shop,
-    purchases: overlay.purchases,
-    preferred: overlay.preferred,
-    budget: overlay.budget,
-    profile: overlay.profile,
-    onboardedAt: overlay.onboardedAt ?? null,
-    ...(overlay.sellGrid ? { sellGrid: overlay.sellGrid } : {}),
-    ...(overlay.restockDay !== undefined ? { restockDay: overlay.restockDay } : {}),
   }
 }

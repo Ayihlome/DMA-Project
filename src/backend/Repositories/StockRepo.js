@@ -47,14 +47,22 @@ class StockRepository {
     return this.applyStockChange(productID, quantity, "opening_stock", true);
   }
 
-  async applyStockChange(productID, amount, reason, setAbsolute = false) {
+  // Pass `tx` (the object a db.transaction callback receives) to make the change part of
+  // the caller's transaction; without it the change runs in its own.
+  async applyStockChange(
+    productID,
+    amount,
+    reason,
+    setAbsolute = false,
+    tx = null,
+  ) {
     const now = new Date().toISOString();
     const movementID = crypto.randomUUID();
     let resultingQuantity;
     let delta;
 
-    await db.transaction(async (tx) => {
-      const { rows } = await tx.execute(
+    const apply = async (t) => {
+      const { rows } = await t.execute(
         `select quantity_on_hand from stock_items where product_id = ?`,
         [productID],
       );
@@ -63,13 +71,13 @@ class StockRepository {
       delta = resultingQuantity - current;
 
       if (rows.length === 0) {
-        await tx.execute(
+        await t.execute(
           `insert into stock_items (product_id, quantity_on_hand, updated_at)
            values (?, ?, ?)`,
           [productID, resultingQuantity, now],
         );
       } else {
-        await tx.execute(
+        await t.execute(
           `update stock_items set quantity_on_hand = ?, last_restocked_at = ?, updated_at = ?
            where product_id = ?`,
           [
@@ -82,14 +90,17 @@ class StockRepository {
       }
 
       if (delta !== 0) {
-        await tx.execute(
+        await t.execute(
           `insert into stock_movements
            (id, product_id, delta, resulting_quantity, reason, created_at)
            values (?, ?, ?, ?, ?, ?)`,
           [movementID, productID, delta, resultingQuantity, reason, now],
         );
       }
-    });
+    };
+
+    if (tx) await apply(tx);
+    else await db.transaction(apply);
 
     if (delta !== 0) {
       await enqueueSync("stock_movements", movementID, "insert", {

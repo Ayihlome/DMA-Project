@@ -145,92 +145,52 @@ class SaleRepository {
   }
 
   // Takes a sale back: marks it voided (it stays on file) and puts its stock back as movements.
-  async voidSale({ saleID, deductions, withoutRecipe = [] }) {
-    const now = new Date().toISOString();
+  // Sales are an append-only ledger on Supabase (no update policy), so the void is sent as its
+  // own row (sale_voids) and the stock goes back as a normal stock movement.
+  async voidSale({ saleID, deductions = [], withoutRecipe = [] }) {
     await db.transaction(async (tx) => {
+      const now = new Date().toISOString();
+      const { rows } = await tx.execute(
+        `select voided_at from sales where id = ?`,
+        [saleID],
+      );
+      if (rows.length === 0) throw new Error(`Sale ${saleID} not found`);
+      if (rows[0].voided_at) throw new Error("Sale is already voided");
+
       await tx.execute(
-        `update sales set voided_at = ?, updated_at = ? where id = ? and voided_at is null`,
+        `update sales set voided_at = ?, updated_at = ? where id = ?`,
         [now, now, saleID],
       );
-      await enqueueSync("sales", saleID, "update", {
+      const voidID = crypto.randomUUID();
+      await enqueueSync("sale_voids", voidID, "insert", {
+        id: voidID,
+        sale_id: saleID,
         voided_at: now,
         updated_at: now,
       });
 
       for (const { productID, quantity } of deductions) {
-        await tx.execute(
-          `update stock_items set quantity_on_hand = quantity_on_hand + ?, updated_at = ? where product_id = ?`,
-          [quantity, now, productID],
-        );
-        const { rows } = await tx.execute(
+        const { rows: stock } = await tx.execute(
           `select quantity_on_hand from stock_items where product_id = ?`,
           [productID],
         );
+        const resulting = (stock[0]?.quantity_on_hand ?? 0) + quantity;
+        if (stock.length === 0) {
+          await tx.execute(
+            `insert into stock_items (product_id, quantity_on_hand, updated_at) values (?, ?, ?)`,
+            [productID, resulting, now],
+          );
+        } else {
+          await tx.execute(
+            `update stock_items set quantity_on_hand = ?, updated_at = ? where product_id = ?`,
+            [resulting, now, productID],
+          );
+        }
         const movementID = crypto.randomUUID();
         await tx.execute(
           `insert into stock_movements (id, product_id, delta, resulting_quantity, reason, created_at)
            values (?, ?, ?, ?, 'sale_void', ?)`,
-          [movementID, productID, quantity, rows[0].quantity_on_hand, now],
-        );
-        await enqueueSync("stock_movements", movementID, "insert", {
-          id: movementID,
-          product_id: productID,
-          delta: quantity,
-          reason: "sale_void",
-          created_at: now,
-        });
-      }
-
-      for (const [productID, quantity] of withoutRecipe) {
-        await tx.execute(
-          `update products set sold_without_recipe = max(0, sold_without_recipe - ?) where id = ?`,
-          [quantity, productID],
-        );
-      }
-    });
-  }
-
-  async getSale(saleID) {
-    const { rows } = await db.execute(`select * from sales where id = ?`, [
-      saleID,
-    ]);
-    return rows[0] ?? null;
-  }
-
-  async getLineItems(saleID) {
-    const { rows } = await db.execute(
-      `select product_id, quantity_sold from sale_line_items where sale_id = ?`,
-      [saleID],
-    );
-    return rows;
-  }
-  // Takes a sale back: marks it voided (it stays on file) and puts its stock back as movements.
-  async voidSale({ saleID, deductions, withoutRecipe = [] }) {
-    const now = new Date().toISOString();
-    await db.transaction(async (tx) => {
-      await tx.execute(
-        `update sales set voided_at = ?, updated_at = ? where id = ? and voided_at is null`,
-        [now, now, saleID],
-      );
-      await enqueueSync("sales", saleID, "update", {
-        voided_at: now,
-        updated_at: now,
-      });
-
-      for (const { productID, quantity } of deductions) {
-        await tx.execute(
-          `update stock_items set quantity_on_hand = quantity_on_hand + ?, updated_at = ? where product_id = ?`,
-          [quantity, now, productID],
-        );
-        const { rows } = await tx.execute(
-          `select quantity_on_hand from stock_items where product_id = ?`,
-          [productID],
-        );
-        const movementID = crypto.randomUUID();
-        await tx.execute(
-          `insert into stock_movements (id, product_id, delta, resulting_quantity, reason, created_at)
-           values (?, ?, ?, ?, 'sale_void', ?)`,
-          [movementID, productID, quantity, rows[0].quantity_on_hand, now],
+          [movementID, productID, quantity, resulting, now],
         );
         await enqueueSync("stock_movements", movementID, "insert", {
           id: movementID,

@@ -4,6 +4,8 @@ import { supabase } from "../../../lib/supabase";
 const MAX_TRIES = 5;
 // Postgres "unique_violation": Supabase already has this row, so the insert is as good as done.
 const DUPLICATE_KEY = "23505";
+// Postgres "undefined_table" / PostgREST "table not in schema cache"
+const MISSING_TABLE = ["42P01", "PGRST205"];
 // Tables written with an upsert, and the columns that identify a row on the server.
 const CONFLICT_COLUMNS = { supplier_prices: "supplier_id,product_id" };
 

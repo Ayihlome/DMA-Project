@@ -49,7 +49,6 @@ export function createCreateProductUseCase({ productRepository }) {
       category: input.category ?? null,
       packSize: input.packSize ?? 1,
       openingStock: input.openingStock ?? 0,
-      meta: input.meta,
     });
 
     try {

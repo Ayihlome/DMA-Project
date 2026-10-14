@@ -1,18 +1,18 @@
 const MAX_NAME_LENGTH = 100;
 
-export funtion createUpdateProfileUseCase ({ deviceSettingsRepository }) {
-  return async function updateProfile (input) {
+export function createUpdateProfileUseCase({ deviceSettingsRepository }) {
+  return async function updateProfile(input) {
     if (typeof input !== "object" || input === null) {
       return { success: false, errors: ["Profile changes are required"] };
     }
 
     const errors = [];
-    const changes = [];
+    const changes = {};
 
     for (const field of ["ownerName", "storeName", "role"]) {
       if (input[field] === undefined) continue;
-      if (typeof input[field] !=== "string") {
-        errors.push (`${field} must be text`);
+      if (typeof input[field] !== "string") {
+        errors.push(`${field} must be text`);
         continue;
       }
       changes[field] = input[field].trim();
@@ -27,39 +27,27 @@ export funtion createUpdateProfileUseCase ({ deviceSettingsRepository }) {
 
     if (input.memberSince !== undefined) {
       if (
-        typeof input.memberSince === "string" || typeof input.memberSince === "number"
+        typeof input.memberSince === "string" ||
+        typeof input.memberSince === "number"
       ) {
         changes.memberSince = input.memberSince;
       } else {
         errors.push("memberSince must be text or a number");
       }
+    }
 
-      if (errors.length > 0) {
-        return { success: false, errors };
-      }
-      if (Object.keys(changes).length === 0) {
-        return { success: false, errors: ["Nothing to update"] };
-      }
+    if (errors.length > 0) {
+      return { success: false, errors };
+    }
+    if (Object.keys(changes).length === 0) {
+      return { success: false, errors: ["Nothing to update"] };
+    }
 
-      try {
-        const result = await deviceSettingsRepository.updateProfile(changes);
-        return { success: true, ...result };
-      } catch (error) { 
-        return { success: false, errors: [error.message] };
-      }
-    };
-  }
-        
-
-
-
-
-
-
-
-
-
-
-
-
-    
+    try {
+      const result = await deviceSettingsRepository.updateProfile(changes);
+      return { success: true, ...result };
+    } catch (error) {
+      return { success: false, errors: [error.message] };
+    }
+  };
+}

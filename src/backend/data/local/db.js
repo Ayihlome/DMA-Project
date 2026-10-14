@@ -117,7 +117,6 @@ export async function runMigration() {
       payment text,
       cash_given real,
       voided_at text,
-      voided_at text,
       sync_status text not null default 'pending',
       updated_at text not null
     );
@@ -241,6 +240,11 @@ export async function runMigration() {
       received_at text
     );
   `);
+
+  // Restock orders: who the order is with, how it is paid, when it arrived.
+  await addColumnIfMissing("purchase_orders", "supplier_id", "text");
+  await addColumnIfMissing("purchase_orders", "payment", "text");
+  await addColumnIfMissing("purchase_orders", "received_at", "text");
 }
 
 async function migrateSupplierTables() {
@@ -356,6 +360,8 @@ async function migrateV2Columns() {
   );
   await addColumnIfMissing("sales", "payment", "text");
   await addColumnIfMissing("sales", "cash_given", "real");
+  // A voided sale keeps its row (and its lines); voided_at says when it was taken back.
+  await addColumnIfMissing("sales", "voided_at", "text");
   await addColumnIfMissing("sale_line_items", "label", "text");
 
   // SQLite cannot drop NOT NULL, so an older sale_line_items is rebuilt once.
@@ -383,8 +389,6 @@ async function migrateV2Columns() {
       await tx.execute(
         `alter table sale_line_items_new rename to sale_line_items`,
       );
-      await addColumnIfMissing("sales", "cash_given", "real");
-      await addColumnIfMissing("sales", "voided_at", "text");
     });
   }
 }

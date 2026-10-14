@@ -20,6 +20,7 @@ import SupplierRepository from "../Repositories/SupplierRepository";
 import ShopReadRepository from "../Repositories/ShopReadRepo";
 import DeviceRepository from "../Repositories/DeviceRepo";
 import DeviceSettingsRepository from "../Repositories/DeviceSettingsRepo";
+import PurchaseOrderRepository from "../Repositories/PurchaseOrderRepo";
 
 //Engines
 import KPICalculator from "../engines/KPICalculator";
@@ -50,14 +51,25 @@ import { createLoadShopUseCase } from "./loadShop";
 import { createClaimDeviceUseCase } from "./claimDevice";
 import { createSetStockCountsUseCase } from "./setStockCounts";
 import { createAdjustStockUseCase } from "./adjustStock";
-<<<<<<< HEAD
-import { createVoidSaleUseCase } from "./voidSale";
-import { voidSale } from "@/data/actions";
-=======
 import { createSetPreferredSupplierUseCase } from "./setPreferredSupplier";
-import { createSetStockCountsUseCase } from "./setStockCounts";
 import { createUpdateProfileUseCase } from "./updateProfile";
->>>>>>> f43b0e750200a0027b7cb0b95c13206454dce155
+import { addIngredient } from "./addIngredient";
+import { saveMenuItem } from "./saveMenuItem";
+import { removeMenuItem } from "./removeMenuItem";
+import { applyStarterPacks } from "./applyStarterPacks";
+import { createVoidSaleUseCase } from "./voidSale";
+import {
+  createSetBudgetUseCase,
+  createSaveSellGridUseCase,
+  createSetRestockDayUseCase,
+  createMarkOnboardedUseCase,
+} from "./settings";
+import {
+  createSavePurchaseOrdersUseCase,
+  createReceivePurchaseOrderUseCase,
+  createCancelPurchaseOrderUseCase,
+  createUndoPurchaseOrdersUseCase,
+} from "./purchaseOrders";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -70,7 +82,7 @@ const supplierRepository = new SupplierRepository();
 const shopReadRepository = new ShopReadRepository();
 const deviceRepository = new DeviceRepository();
 const deviceSettingsRepository = new DeviceSettingsRepository();
-
+const purchaseOrderRepository = new PurchaseOrderRepository(stockRepository);
 const recipeEngine = new RecipeEngine(recipeRepository, stockRepository);
 const restockEngine = new RestockEngine(
   kpiSnapshotRepository,
@@ -113,11 +125,6 @@ const rawUseCases = {
     productRepository,
   }),
   adjustStock: createAdjustStockUseCase({ stockRepository }),
-  voidSale: createVoidSaleUseCase({
-    saleRepository,
-    productRepository,
-    recipeRepository,
-  }),
   setStockCounts: createSetStockCountsUseCase({
     productRepository,
     stockRepository,
@@ -158,16 +165,37 @@ const rawUseCases = {
     setSupplierPrice,
   }),
   setPreferredSupplier: createSetPreferredSupplierUseCase({
-    deviceSettingsRepository
+    deviceSettingsRepository,
   }),
-  setStockCounts: createSetStockCountsUseCase ({
+  updateProfile: createUpdateProfileUseCase({
+    deviceSettingsRepository,
+  }),
+  voidSale: createVoidSaleUseCase({
+    saleRepository,
     productRepository,
-    stockRepository,
+    recipeRepository,
   }),
-  updateProfile: createUpdateProfileUseCase ({
-    deviceSettingsRepository
+  setBudget: createSetBudgetUseCase({ deviceSettingsRepository }),
+  saveSellGrid: createSaveSellGridUseCase({ deviceSettingsRepository }),
+  setRestockDay: createSetRestockDayUseCase({ deviceSettingsRepository }),
+  markOnboarded: createMarkOnboardedUseCase({ deviceSettingsRepository }),
+  savePurchaseOrders: createSavePurchaseOrdersUseCase({
+    purchaseOrderRepository,
+  }),
+  receivePurchaseOrder: createReceivePurchaseOrderUseCase({
+    purchaseOrderRepository,
+  }),
+  cancelPurchaseOrder: createCancelPurchaseOrderUseCase({
+    purchaseOrderRepository,
+  }),
+  undoPurchaseOrders: createUndoPurchaseOrdersUseCase({
+    purchaseOrderRepository,
   }),
   claimDevice: createClaimDeviceUseCase({ deviceRepository }),
+  addIngredient,
+  saveMenuItem,
+  removeMenuItem,
+  applyStarterPacks,
   // { retryFailed: true } first gives rows that were parked as failed another go.
   syncNow: async (input) => {
     if (input?.retryFailed) await retryFailedSync();
@@ -204,7 +232,7 @@ export const useCases = Object.fromEntries(
 );
 
 useCases.loadShop = whenDatabaseReady(
-  createLoadShopUseCase({ shopReadRepository }),
+  createLoadShopUseCase({ shopReadRepository, purchaseOrderRepository }),
 );
 // the old name, still used by existing imports
 export const useCase = useCases;

@@ -2,16 +2,16 @@
  * The shop, kept in SQLite through the use cases (EXPO_PUBLIC_STORE=sqlite).
  *
  * The screens still get the same useStore(): `state` is the same AppState and the actions are the same
- * 26 members, so no screen changes. What differs is where the data lives:
+ * members, so no screen changes. What differs is where the data lives:
  *
  *   an action   -> A.<action>(state) shows the result at once (the counter must not wait for a database)
  *               -> then the use cases write it to SQLite, one change after another
  *               -> then loadShop reads the shop back, which swaps in real ids, stock and the sync queue
  *   syncing     -> useCases.syncNow() sends the queued rows to Supabase while online
  *
- * Budget, profile, preferred supplier, the onboarding flag, the sell grid and purchase orders have no
- * use case yet, so they are kept on the phone (AsyncStorage, per account) and laid over what loadShop
- * returns. Move each one into SQLite when its use case lands, and delete it from the overlay.
+ * Everything the screens show comes back from loadShop: products, sales and voids, orders, budget, profile,
+ * preferred suppliers, the sell grid, the restock day and the onboarding flag. Only product photos are
+ * still kept on the phone (AsyncStorage).
  */
 
 
@@ -24,18 +24,8 @@ import type { AppState } from './types'
 import type { BackupStatus } from '../lib/cloudBackup'
 import { StoreContext } from '../store'
 import { useCases } from '../backend/useCases/container'
-import { demoShop, emptyShop, newId, persistUndoStock, persistVoid, overlayOf, persistChange, persistReceive, persistSale, uuidify, withOverlay, type Overlay } from './sqlitePersist'
-const overlayKey = (ownerId: string) => `stockevo-sqlite-overlay:${ownerId}`
+import { demoShop, emptyShop, failed, newId, persistChange, persistSale, persistVoid, uuidify } from './sqlitePersist'
 const SYNC_EVERY_MS = 60_000
-
-function parseOverlay(raw: string | null): Overlay | null {
-  try {
-    const o = raw ? JSON.parse(raw) : null
-    return o && Array.isArray(o.purchases) && o.preferred && o.profile && typeof o.budget === 'number' ? (o as Overlay) : null
-  } catch {
-    return null
-  }
-}
 
 export function SqliteStoreProvider({
   children,
@@ -63,6 +53,7 @@ export function SqliteStoreProvider({
   const jobs = useRef(0)
   const chain = useRef<Promise<unknown>>(Promise.resolve())
   const syncing = useRef(false)
+  // The screen's copy of a new sale has a placeholder id until the next refresh; this maps it to the real one
   const saleIds = useRef(new Map<string, string>())
 
   const commit = useCallback((next: AppState) => {
@@ -77,7 +68,7 @@ export function SqliteStoreProvider({
     try {
       const shop = await useCases.loadShop()
       if (jobs.current > 0 || !ref.current) return
-      commit(withOverlay(shop, overlayOf(ref.current)))
+      commit(shop)
     } catch (e) {
       console.warn('[sqliteStore] loadShop failed', e)
     }
@@ -132,13 +123,10 @@ export function SqliteStoreProvider({
       try {
         const claim = await useCases.claimDevice({ ownerID: ownerId })
         if (!claim.success) throw new Error(claim.errors?.join(', '))
-        const [rawOverlay, rawPhotos] = await Promise.all([
-          AsyncStorage.getItem(overlayKey(ownerId)).catch(() => null),
-          AsyncStorage.getItem(A.PHOTO_KEY).catch(() => null),
-        ])
+        const rawPhotos = await AsyncStorage.getItem(A.PHOTO_KEY).catch(() => null)
         const shop = await useCases.loadShop()
         if (!alive) return
-        commit(withOverlay(shop, claim.cleared ? null : parseOverlay(rawOverlay)))
+        commit(shop)
         if (claim.cleared) AsyncStorage.removeItem(A.PHOTO_KEY).catch(() => {})
         try {
           setPhotos(!claim.cleared && rawPhotos ? JSON.parse(rawPhotos) : {})
@@ -154,11 +142,6 @@ export function SqliteStoreProvider({
       alive = false
     }
   }, [ownerId, commit])
-
-  // The fields that have no use case yet stay on the phone.
-  useEffect(() => {
-    if (state && ownerId) AsyncStorage.setItem(overlayKey(ownerId), JSON.stringify(overlayOf(state))).catch(() => {})
-  }, [state, ownerId])
 
   useEffect(() => NetInfo.addEventListener((s) => setOnline(s.isConnected !== false && s.isInternetReachable !== false)), [])
 
@@ -184,19 +167,27 @@ export function SqliteStoreProvider({
         const { errors, supplierIds } = await persistChange(useCases, prev, next)
         // A supplier typed on screen gets its real id from the database; the saved choices follow it
         if (supplierIds.size && ref.current) {
-          const preferred = Object.fromEntries(Object.entries(ref.current.preferred).map(([p, s]) => [p, supplierIds.get(s) ?? s]))
+          const before = ref.current.preferred
+          const preferred = Object.fromEntries(Object.entries(before).map(([p, s]) => [p, supplierIds.get(s) ?? s]))
           commit({ ...ref.current, preferred })
+          for (const [productId, supplierId] of Object.entries(preferred)) {
+            if (before[productId] === supplierId) continue
+            errors.push(...failed(await useCases.setPreferredSupplier({ productId, supplierId }), 'setPreferredSupplier'))
+          }
         }
         return errors
       })
     }
-    /** Fields with no use case: on screen and on the phone only. */
-    const local = (fn: (s: AppState) => AppState) => commit(fn(cur()))
+    /** Shows the new state now, then runs one use case and reports what it said. */
+    const save = (next: AppState, what: string, call: () => Promise<{ success?: boolean; errors?: string[] } | undefined>) => {
+      commit(next)
+      enqueue(async () => failed(await call(), what))
+    }
 
     const api: Pick<
       A.StoreApi,
       | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'createOrderList'
-               | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'voidSale' |'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
+      | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'voidSale' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
       | 'setBudget' | 'updateProfile' | 'finishOnboarding' | 'skipOnboarding' | 'setStockCounts' | 'resetDemoData'
     > = {
       recordSale: (lines, meta) => {
@@ -219,81 +210,105 @@ export function SqliteStoreProvider({
         const built = A.buildMenuItem(cur(), input, id)
         // A new item gets a uuid; an edit keeps the id it has
         const product = id && cur().products.some((p) => p.id === id) ? built : { ...built, id: newId() }
-        change((s) => A.upsertProduct(s, product))
+        save(A.upsertProduct(cur(), product), 'saveMenuItem', () =>
+          useCases.saveMenuItem({ id: product.id, name: input.name, price: input.price, menu: input.menu, recipe: input.recipe }),
+        )
         return product
       },
-      removeMenuItem: (id) => change((s) => A.removeMenuItem(s, id)),
+      removeMenuItem: (id) => {
+        const next = A.removeMenuItem(cur(), id)
+        if (next !== cur()) save(next, 'removeMenuItem', () => useCases.removeMenuItem({ id }))
+      },
       addIngredient: (input) => {
         const product = { ...A.buildIngredient(input), id: newId() }
-        change((s) => A.upsertProduct(s, product))
+        save(A.upsertProduct(cur(), product), 'addIngredient', () =>
+          useCases.addIngredient({
+            id: product.id,
+            name: product.name,
+            unit: product.unit,
+            unitPlural: product.unitPlural,
+            packSize: product.packSize,
+            packLabel: product.packLabel,
+            cost: product.cost,
+          }),
+        )
         return product
       },
-      setStockCounts: (counts) => {
-          commit(A.setStockCounts(cur(), counts))
-          enqueue(async () => {
-            const r = await useCases.setStockCounts({ counts })
-            return r.success ? [] : (r.errors ?? ['setStockCounts failed'])
-          })
-          },
+      setStockCounts: (counts) => save(A.setStockCounts(cur(), counts), 'setStockCounts', () => useCases.setStockCounts({ counts })),
       upsertSupplierPrice: (input) => change((s) => A.upsertSupplierPrice(s, input)),
 
-      finishOnboarding: (sel, profile, counts) =>
+      finishOnboarding: (sel, profile, counts) => {
+        const started = A.applyStarterPacks(cur(), sel, profile, counts)
+        const { products, prices, preferred } = uuidify(started)
+        const next = { ...started, products, prices, preferred }
+        const recipes = Object.fromEntries(products.filter((p) => p.composite && p.recipe?.length).map((p) => [p.id, p.recipe]))
+        const stock = Object.fromEntries(products.filter((p) => !p.composite).map((p) => [p.id, p.stock]))
+        save(next, 'applyStarterPacks', () => useCases.applyStarterPacks({ products, recipes, counts: stock, profile: next.profile }))
+      },
+      skipOnboarding: (profile) => {
+        // An empty shop gets the demo catalogue; one that already has products keeps them. The products and
+        // prices go in like any other edit; the onboarding flag and the profile follow in the next write.
         change((s) => {
-          const started = A.applyStarterPacks(s, sel, profile, counts)
-          const { products, prices, preferred } = uuidify(started)
-          return { ...started, products, prices, preferred }
-        }),
-      skipOnboarding: (profile) =>
-        change((s) => {
-          // An empty shop gets the demo catalogue; one that already has products keeps them
           const demo = s.products.length ? null : demoShop(createSeedState())
           const base = demo ? { ...s, products: demo.products, suppliers: demo.suppliers, prices: demo.prices, preferred: demo.preferred } : s
           return A.skipOnboarding(base, profile)
-        }),
+        })
+        const { profile: saved, onboardedAt } = cur()
+        enqueue(async () => failed(await useCases.markOnboarded({ profile: saved, at: onboardedAt ?? Date.now() }), 'markOnboarded'))
+      },
 
-      // Orders have no use case yet; receiving one does add the stock, through receiveStock
+      // Orders live in SQLite. Receiving one adds its stock in the same write; undoing takes it back out.
       createOrderList: (lines) => {
         const created = A.planOrders(cur(), lines)
-        local((s) => A.addOrders(s, created))
+        save(A.addOrders(cur(), created), 'savePurchaseOrders', () => useCases.savePurchaseOrders({ orders: created }))
         return created
       },
       receivePurchase: (id) => {
-        const order = cur().purchases.find((p) => p.id === id)
         const next = A.receivePurchase(cur(), id)
-        if (!order || next === cur()) return
-        commit(next)
-        enqueue(() => persistReceive(useCases, order.lines))
+        if (next !== cur()) save(next, 'receivePurchaseOrder', () => useCases.receivePurchaseOrder({ id, receivedAt: Date.now() }))
       },
-      // "Bought it": the purchases are recorded on the phone, the stock goes in through receiveStock
+      // "Bought it": the purchases are recorded as delivered and the stock goes in, in one write
       receiveRestock: (lines) => {
         const clean = lines.filter((l) => l.qty > 0)
         if (!clean.length) return []
         const created = A.planOrders(cur(), clean)
-        commit(A.receivePlanned(cur(), created))
-        enqueue(() => persistReceive(useCases, clean))
-        return created.map((po) => po.id)
+        const next = A.receivePlanned(cur(), created)
+        const ids = created.map((po) => po.id)
+        const delivered = next.purchases.filter((p) => ids.includes(p.id))
+        save(next, 'savePurchaseOrders', () => useCases.savePurchaseOrders({ orders: delivered }))
+        return ids
       },
       // Undo takes the stock back out; the trip's lines say how much, and the count may end up below zero
       undoRestock: (ids) => {
-        const undone = cur().purchases.filter((p) => ids.includes(p.id) && p.status === 'delivered')
         const next = A.undoRestock(cur(), ids)
-        if (!undone.length || next === cur()) return
-        commit(next)
-        enqueue(() => persistUndoStock(useCases, undone.flatMap((p) => p.lines)))
+        if (next === cur()) return
+        const gone = cur().purchases.filter((p) => ids.includes(p.id)).map((p) => p.id)
+        save(next, 'undoPurchaseOrders', () => useCases.undoPurchaseOrders({ ids: gone }))
       },
-      setRestockDay: (day) => local((s) => A.setRestockDay(s, day)),
+      setRestockDay: (day) => {
+        const next = A.setRestockDay(cur(), day)
+        if (next !== cur()) save(next, 'setRestockDay', () => useCases.setRestockDay({ day }))
+      },
+      cancelPurchase: (id) => {
+        const next = A.cancelPurchase(cur(), id)
+        if (next !== cur()) save(next, 'cancelPurchaseOrder', () => useCases.cancelPurchaseOrder({ id }))
+      },
+      // Takes a sale back: its stock returns and it moves to voidedSales
       voidSale: (saleId) => {
         const next = A.voidSale(cur(), saleId)
         if (next === cur()) return
         commit(next)
         enqueue(() => persistVoid(useCases, saleIds.current.get(saleId) ?? saleId))
       },
-      cancelPurchase: (id) => local((s) => A.cancelPurchase(s, id)),
 
-      setPreferredSupplier: (productId, supplierId) => local((s) => A.setPreferredSupplier(s, productId, supplierId)),
-      setBudget: (n) => local((s) => A.setBudget(s, n)),
-      updateProfile: (p) => local((s) => A.updateProfile(s, p)),
-      updateSellGrid: (patch) => local((s) => A.updateSellGrid(s, patch)),
+      setPreferredSupplier: (productId, supplierId) =>
+        save(A.setPreferredSupplier(cur(), productId, supplierId), 'setPreferredSupplier', () => useCases.setPreferredSupplier({ productId, supplierId })),
+      setBudget: (n) => {
+        const next = A.setBudget(cur(), n)
+        save(next, 'setBudget', () => useCases.setBudget({ amount: next.budget }))
+      },
+      updateProfile: (p) => save(A.updateProfile(cur(), p), 'updateProfile', () => useCases.updateProfile(p)),
+      updateSellGrid: (patch) => save(A.updateSellGrid(cur(), patch), 'saveSellGrid', () => useCases.saveSellGrid({ patch })),
 
       resetDemoData: () => {
         commit(emptyShop())
