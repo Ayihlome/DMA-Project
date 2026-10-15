@@ -16,7 +16,7 @@ import type { PaymentMethod } from '../../data/types'
 import { colors, DURATION, fonts, money, radius, space, type } from '../../theme/tokens'
 import { cashOptions } from './sellModel'
 
-const METHODS: PaymentMethod[] = ['Cash', 'Card', 'EFT']
+const METHODS: PaymentMethod[] = ['Cash', 'Card']
 const EASE_IN_OUT = Easing.bezier(0.77, 0, 0.175, 1)
 
 
@@ -114,7 +114,7 @@ function PayBody({ total, onDone }: { total: number; onDone: (payment: PaymentMe
 }
 
 /**
- * Cash / Card / EFT. The selected pill slides between segments in 200ms
+ * Cash / Card. The selected pill slides between segments in 200ms
  * (ease-in-out — it's moving across the screen, not entering it). It's
  * absolutely positioned with no children, so only its transform animates and
  * nothing else re-lays-out. The tick fires on press, not when the pill lands.
