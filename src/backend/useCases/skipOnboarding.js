@@ -20,10 +20,7 @@ export async function createSkipOnboardingUseCase({ deviceSettingsRepository }) 
       await deviceSettingsRepository.set(SETTINGS_KEYS.onBoardedAt, onBoardedAt);
       return { success: true, onBoardedAt, profile: savedProfile };
     } catch (error) {
-      return { success; false, errors: [error.message] };
-    }
+        return { success; false, errors: [error.message]};
+    
   };
 }
-
-                                       
-    
