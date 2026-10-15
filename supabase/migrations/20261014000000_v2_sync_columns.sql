@@ -9,7 +9,7 @@ alter table public.products
 
 -- How a sale was paid. cash_given is only set for cash.
 alter table public.sales
-  add column if not exists payment text check (payment in ('Cash', 'Card', 'EFT'));
+  add column if not exists payment text check (payment in ('Cash', 'Card'));
 alter table public.sales
   add column if not exists cash_given numeric(12, 2) check (cash_given >= 0);
 

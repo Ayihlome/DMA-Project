@@ -90,7 +90,7 @@ export type SaleLine = {
   label?: string
 }
 
-export type PaymentMethod = 'Cash' | 'Card' | 'EFT'
+export type PaymentMethod = 'Cash' | 'Card'
 
 export type Sale = {
   id: string

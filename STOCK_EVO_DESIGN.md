@@ -70,7 +70,7 @@ Auth: Supabase phone OTP (`signInWithOtp({ phone })` → `verifyOtp`), email+pas
   - tinted image area 92px (photo later) with stock badge top-left: black "14 in stock", red "3 left" (<10), grey "Out"; kotas show "Makes 6" (from ingredients).
   - name (14/700), price (16/800), round **+** button (yellow). In cart → black button showing "× 2" in yellow. Out of stock → disabled.
 - **Cart bar** (floating, bottom 28): black, radius 20 — "3 items in sale / R81,00" + yellow "View sale →".
-- **Sale sheet** (bottom sheet): lines with − / qty / + (yellow), VAT (15%, included), Total, payment segmented Cash / Card / EFT, black "Charge R81,00" with yellow text. On charge → save sale (local SQLite first, sync to Supabase), toast "Sale saved".
+- **Sale sheet** (bottom sheet): lines with − / qty / + (yellow), VAT (15%, included), Total, payment segmented Cash / Card, black "Charge R81,00" with yellow text. On charge → save sale (local SQLite first, sync to Supabase), toast "Sale saved".
 
 ## POS — New sale (tablet/desktop, optional)
 Black 88px sidebar (yellow logo, icon nav, active = yellow tile) · product grid (`minmax(210px,1fr)`) · white right panel "Current sale" with the same sheet contents.
