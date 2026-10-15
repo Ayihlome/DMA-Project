@@ -1,7 +1,7 @@
 import { SETTINGS_KEYS } from "../Repositories/DeviceSettingsRepo";
 
 export async function createSkipOnboardingUseCase({ deviceSettingsRepository }) {
-  return async function skipOnboarding(inout) {
+  return async function skipOnboarding(input) {
     const profile = input?.profile;
 
     if (profile !== undefined && (typeof profile !== "object" || profile === null)) {
