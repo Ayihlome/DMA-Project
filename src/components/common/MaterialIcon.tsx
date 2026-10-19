@@ -11,6 +11,7 @@ const IOS_SYMBOLS: Record<string, string> = {
   pause: 'pause.fill',
   undo: 'arrow.uturn.backward',
   backspace: 'delete.left',
+  dialpad: 'circle.grid.3x3.fill',
   chevron_left: 'chevron.left',
   shopping_cart: 'cart.fill',
   home: 'house.fill',
