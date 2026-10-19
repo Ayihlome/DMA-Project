@@ -43,7 +43,7 @@ Hint text: "Tap to add · hold to keep adding the last one you sold".
 - Undo = remove the last add (keep a history stack per sale). No confirm dialogs.
 - Park = keep this sale as a tab, start a new empty one.
 
-**Pay sheet**: Total big; Cash / Card / EFT (Cash default); if Cash: "Customer gave" Exact / R50 / R100 / R200 → big "Change R52,00" (or "Still owes"). **Done · next customer** → save sale (local first, sync later), remove that sale tab, toast "Sale saved · R48,00 · Cash · change R52,00".
+**Pay sheet**: Total big; Cash / Card (Cash default); if Cash: "Customer gave" Exact / R50 / R100 / R200 → big "Change R52,00" (or "Still owes"). **Done · next customer** → save sale (local first, sync later), remove that sale tab, toast "Sale saved · R48,00 · Cash · change R52,00".
 
 Rules: never block a sale for stock = 0 (allow negative, flag for count). Grid order should default to best sellers (by frequency) until the owner edits it.
 

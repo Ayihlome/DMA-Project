@@ -1,7 +1,9 @@
 import * as SQLite from "expo-sqlite";
+import { getDbKey, isLegacyImported, markLegacyImported } from "./dbKeys";
 
-// The local database runs on expo-sqlite, which ships inside Expo Go and in every
-// development build (op-sqlite is a custom native module and needs its own build).
+// The local database runs on expo-sqlite built with SQLCipher (see the "expo-sqlite" plugin entry
+// in app.json), so the file on the phone is encrypted. The key is made once and kept in the
+// operating system's secure storage (dbKey.js).
 //
 // Everything in the app talks to the database through the two calls below, so the
 // repositories do not care which SQLite library sits underneath:
@@ -14,13 +16,122 @@ import * as SQLite from "expo-sqlite";
 // Transactions are queued one at a time, so two of them never overlap. While a
 // transaction is open, plain db.execute calls (enqueueSync writes the sync_queue row
 // this way) run on the same connection and so join that transaction, as they did before.
-const sqlite = SQLite.openDatabaseSync("stockmate.db");
+
+const DB_NAME = "stockevo.enc.db"; // encrypted
+const LEGACY_DB_NAME = "stockmate.db"; // plain text, used before encryption was added
+const ALLOW_PLAIN_IN_DEV =
+  typeof __DEV__ !== "undefined" &&
+  __DEV__ &&
+  process.env.EXPO_PUBLIC_ALLOW_PLAIN_DB === "1";
+
+// Raw-key syntax: SQLCipher uses the 32 bytes as they are (no password stretching).
+const keyLiteral = (key) => `"x'${key}'"`;
+const sqlString = (text) => `'${text.replace(/'/g, "''")}'`;
+
+// Plain SQLite has no cipher_version, so this tells us whether SQLCipher is really in the build.
+async function sqlCipherIsLinked() {
+  const probe = await SQLite.openDatabaseAsync(":memory:");
+  try {
+    const row = await probe.getFirstAsync("pragma cipher_version");
+    return Boolean(row && Object.values(row)[0]);
+  } finally {
+    await probe.closeAsync();
+  }
+}
+
+async function dropLegacyDatabase() {
+  try {
+    await SQLite.deleteDatabaseAsync(LEGACY_DB_NAME);
+  } catch {
+    // Nothing to delete.
+  }
+}
+
+// One-time copy of an existing plain-text database into the encrypted one, so data a phone
+// already holds (including changes not yet synced) is not lost when this update is installed.
+async function importLegacyDatabase(key) {
+  if (await isLegacyImported()) {
+    // An earlier run copied the data but stopped before deleting the plain-text file.
+    await dropLegacyDatabase();
+    return;
+  }
+
+  const legacy = await SQLite.openDatabaseAsync(LEGACY_DB_NAME);
+  try {
+    const row = await legacy.getFirstAsync(
+      "select count(*) as n from sqlite_master",
+    );
+    if (Number(row?.n) > 0) {
+      // Start from an empty target: a half-finished earlier copy would make the export fail.
+      await SQLite.deleteDatabaseAsync(DB_NAME).catch(() => {});
+      const folder = SQLite.defaultDatabaseDirectory.replace(/\/*$/, "");
+      await legacy.execAsync(
+        `ATTACH DATABASE ${sqlString(`${folder}/${DB_NAME}`)} AS enc KEY ${keyLiteral(key)};`,
+      );
+      await legacy.getFirstAsync("select sqlcipher_export('enc')");
+      await legacy.execAsync("DETACH DATABASE enc;");
+    }
+  } finally {
+    await legacy.closeAsync();
+  }
+
+  // The copy is only trusted once this flag is set; until then the plain file stays the source of truth.
+  await markLegacyImported();
+  await dropLegacyDatabase();
+}
+
+async function unlock(sqlite, key) {
+  // PRAGMA key must be the first statement on the connection.
+  await sqlite.execAsync(`PRAGMA key = ${keyLiteral(key)};`);
+  try {
+    // A wrong key (or a file that is not encrypted) only shows up on the first read.
+    await sqlite.getFirstAsync("select count(*) from sqlite_master");
+  } catch (error) {
+    throw new Error(
+      "The local database could not be unlocked with this phone's key.",
+      {
+        cause: error,
+      },
+    );
+  }
+}
+
+async function openDatabase() {
+  if (!(await sqlCipherIsLinked())) {
+    if (ALLOW_PLAIN_IN_DEV) {
+      console.warn(
+        "[db] SQLCipher is not in this build, so the development database is NOT encrypted.",
+      );
+      return SQLite.openDatabaseAsync(LEGACY_DB_NAME);
+    }
+    throw new Error(
+      "This build has no SQLCipher, so the local database cannot be encrypted. " +
+        "Make a development build (npx expo run:android); Expo Go cannot be used.",
+    );
+  }
+
+  const key = await getDbKey();
+  await importLegacyDatabase(key);
+  const sqlite = await SQLite.openDatabaseAsync(DB_NAME);
+  await unlock(sqlite, key);
+  return sqlite;
+}
+
+// Opened on first use and shared afterwards. A failure is not cached, so the next call retries.
+let opening = null;
+const getSqlite = () => {
+  opening ??= openDatabase().catch((error) => {
+    opening = null;
+    throw error;
+  });
+  return opening;
+};
 
 const clean = (params = []) =>
   params.map((value) => (value === undefined ? null : value));
 
 const run = async (sql, params) => ({
-  rows: await sqlite.getAllAsync(sql, clean(params)),
+  rows: await (await getSqlite()).getAllAsync(sql, clean(params)),
 });
 
 let queue = Promise.resolve();
@@ -37,6 +148,7 @@ export const db = {
 
   transaction: (work) =>
     inQueue(async () => {
+      const sqlite = await getSqlite();
       await sqlite.execAsync("BEGIN");
       inTransaction = true;
       try {
@@ -51,6 +163,16 @@ export const db = {
       }
     }),
 };
+
+/**
+ * Whether the open database is SQLCipher-encrypted. The database is only ever opened with a key
+ * when SQLCipher is present, so the SQLCipher version is the proof; null means plain SQLite.
+ */
+export async function encryptionStatus() {
+  const { rows } = await db.execute("pragma cipher_version");
+  const version = rows[0] ? Object.values(rows[0])[0] : null;
+  return { encrypted: Boolean(version), cipherVersion: version ?? null };
+}
 
 export async function runMigration() {
   await db.execute(`

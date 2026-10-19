@@ -31,7 +31,9 @@
       ],
       "expo-sqlite",
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-router",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
