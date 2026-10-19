@@ -12,12 +12,21 @@
 
 export const db = {
   execute() {
-    throw new Error('SQLite is not available on web. Guard this call with Platform.OS !== "web".')
+    throw new Error(
+      'SQLite is not available on web. Guard this call with Platform.OS !== "web".',
+    );
   },
   transaction() {
-    throw new Error('SQLite is not available on web. Guard this call with Platform.OS !== "web".')
+    throw new Error(
+      'SQLite is not available on web. Guard this call with Platform.OS !== "web".',
+    );
   },
-}
+};
 
 /** No tables to create in a browser. Resolves so callers can await it unconditionally. */
 export async function runMigration() {}
+
+/** Web has no local database, so nothing is encrypted there. */
+export async function encryptionStatus() {
+  return { encrypted: false, cipherVersion: null };
+}

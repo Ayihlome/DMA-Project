@@ -14,6 +14,11 @@
     "android": {
       "package": "com.stockevo.app"
     },
+    "web":{
+      "bundler": "metro",
+      "output": "single",
+      "favicon": "./assets/images/images/favicon.png"
+    },
     "plugins": [
       "expo-font",
       [
@@ -29,9 +34,11 @@
           "photosPermission": "StockEvo uses your photos so you can set your own product pictures."
         }
       ],
-      "expo-sqlite",
+      ["expo-sqlite", { "useSQLCipher": true }],
       "expo-sharing",
-      "expo-status-bar"
+      "expo-status-bar",
+      "expo-router",
+      "expo-secure-store"
     ],
     "experiments": {
       "typedRoutes": true,
