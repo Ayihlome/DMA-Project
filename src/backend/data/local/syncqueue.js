@@ -7,7 +7,10 @@ const DUPLICATE_KEY = "23505";
 // Postgres "undefined_table" / PostgREST "table not in schema cache"
 const MISSING_TABLE = ["42P01", "PGRST205"];
 // Tables written with an upsert, and the columns that identify a row on the server.
-const CONFLICT_COLUMNS = { supplier_prices: "supplier_id,product_id" };
+const CONFLICT_COLUMNS = {
+  supplier_prices: "supplier_id,product_id",
+  supplier_product_map: "supplier_id, product_id",
+};
 
 let running = false;
 

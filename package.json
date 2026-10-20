@@ -59,6 +59,7 @@
     "esbuild": "^0.28.2",
     "eslint": "^9.0.0",
     "eslint-config-expo": "~57.0.2",
+    "supabase": "^2.121.0",
     "typescript": "~6.0.3"
   }
 }
