@@ -21,6 +21,7 @@ import ShopReadRepository from "../Repositories/ShopReadRepo";
 import DeviceRepository from "../Repositories/DeviceRepo";
 import DeviceSettingsRepository from "../Repositories/DeviceSettingsRepo";
 import PurchaseOrderRepository from "../Repositories/PurchaseOrderRepo";
+import SupplierProductMapRepository from "../Repositories/SupplierProductMapRepository";
 
 //Engines
 import KPICalculator from "../engines/KPICalculator";
@@ -70,6 +71,11 @@ import {
   createCancelPurchaseOrderUseCase,
   createUndoPurchaseOrdersUseCase,
 } from "./purchaseOrders";
+import { createSuggestSupplierMatchesUseCases } from "./suggestSupplierMatches";
+import {
+  createSaveSupplierMatchUseCase,
+  createGetSupplierMatchesUseCase,
+} from "./supplierMatches";
 
 // create the repos once then the get used everywhere else
 const recipeRepository = new RecipeRepository();
@@ -83,6 +89,7 @@ const shopReadRepository = new ShopReadRepository();
 const deviceRepository = new DeviceRepository();
 const deviceSettingsRepository = new DeviceSettingsRepository();
 const purchaseOrderRepository = new PurchaseOrderRepository(stockRepository);
+const supplierProductMapRepository = new SupplierProductMapRepository();
 const recipeEngine = new RecipeEngine(recipeRepository, stockRepository);
 const restockEngine = new RestockEngine(
   kpiSnapshotRepository,
@@ -196,6 +203,13 @@ const rawUseCases = {
   saveMenuItem,
   removeMenuItem,
   applyStarterPacks,
+  suggestSupplierMatches: createSuggestSupplierMatchesUseCases(),
+  saveSupplierMatch: createSaveSupplierMatchUseCase({
+    supplierProductMapRepository,
+  }),
+  getSupplierMatches: createGetSupplierMatchesUseCase({
+    supplierProductMapRepository,
+  }),
   // { retryFailed: true } first gives rows that were parked as failed another go.
   syncNow: async (input) => {
     if (input?.retryFailed) await retryFailedSync();
