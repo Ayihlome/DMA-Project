@@ -19,6 +19,7 @@
     "saveMenuItem",
     "setBudget",
     "setPhoto",
+    "setPortion",
     "setPreferredSupplier",
     "setRestockDay",
     "setStockCounts",
@@ -33,6 +34,7 @@
   ],
   "AppState": [
     "budget",
+    "lastCountAt?",
     "lastSyncedAt",
     "onboardedAt?",
     "preferred",
@@ -61,6 +63,7 @@
     "name",
     "packLabel",
     "packSize",
+    "portion?",
     "price",
     "priceOptions?",
     "recipe?",

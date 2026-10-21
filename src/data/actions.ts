@@ -3,7 +3,7 @@
  * current state and returns the next one (including its sync-queue entry), so both apps
  * apply exactly the same business rules; only persistence differs per platform.
  */
-import type { AppState, CategoryKey, PaymentMethod, Product, Profile, Purchase, PurchaseLine, RecipeLine, SaleLine, SellGridSettings, SyncOp } from './types'
+import type { AppState, CategoryKey, Family, PaymentMethod, Portion, Product, Profile, Purchase, PurchaseLine, RecipeLine, SaleLine, SellGridSettings, SyncOp } from './types'
 import { QUICK_AMOUNT_ID } from './types'
 import { deductionsFor, productById } from './inventory'
 import { buildStarterCatalogue, type StarterSelection } from './starterPacks'
@@ -32,6 +32,23 @@ export type ProductInput = {
   packSize: number
   /** What the pack is called — "tray", "crate". Absent keeps the current name. */
   packName?: string
+  /** What one unit costs the shop. Absent keeps the current cost (0 for a new product). */
+  cost?: number
+  /**
+   * The Sell tile it sits under: bread or cold drink, with its brand and (cold
+   * drinks) size. `null` takes it out of a group; absent keeps what it has.
+   */
+  family?: Exclude<Family, 'airtime'> | null
+  variant?: string
+  size?: string
+}
+
+/** Group, brand and size from the form, or nothing when the product stands on its own. */
+function groupFields(input: ProductInput): Pick<Product, 'family' | 'variant' | 'size'> {
+  if (!input.family) return {}
+  const variant = input.variant?.trim() || input.name.trim()
+  const size = input.family === 'colddrink' ? input.size?.trim() || undefined : undefined
+  return { family: input.family, variant, ...(size ? { size } : {}) }
 }
 
 /** The API both store providers expose through `useStore()`. */
@@ -49,6 +66,8 @@ export type StoreApi = {
   removeMenuItem: (id: string) => void
   /** A new stock item to use as an ingredient: counted and bought, never sold. */
   addIngredient: (input: IngredientInput) => Product
+  /** How the kitchen measures an ingredient ("1 potato = 5 chips"); null clears it. */
+  setPortion: (productId: string, portion: Portion | null) => void
   createOrderList: (lines: OrderInput) => Purchase[]
   receivePurchase: (id: string) => void
   /** Records a shopping trip as delivered purchases and adds the stock. Returns the purchase ids, for Undo. */
@@ -99,6 +118,58 @@ export type IngredientInput = {
   packLabel?: string
   /** Cost of one unit, for working out what a menu item costs to make. */
   cost?: number
+  /** How the kitchen measures it, when not in the unit it is counted in. */
+  portion?: Portion
+}
+
+/**
+ * A portion from what the owner typed: "chips" (or "chip") and 5 → chip / chips, 5 per unit.
+ * Null when either is missing, which means "measured in the unit it is counted in".
+ */
+export function makePortion(servedAs: string, perUnit: number): Portion | null {
+  const served = servedAs.trim().toLowerCase()
+  if (!served || !(perUnit > 0)) return null
+  return { name: served.replace(/s$/, '') || served, plural: served.endsWith('s') ? served : `${served}s`, perUnit }
+}
+
+/** Stock units → what the kitchen calls them: 2 potatoes → 10 chips. Unchanged without a portion. */
+export const toPortions = (p: Product, qty: number) => (p.portion ? qty * p.portion.perUnit : qty)
+/** Kitchen measure → stock units: 10 chips → 2 potatoes. */
+export const fromPortions = (p: Product, n: number) => (p.portion ? n / p.portion.perUnit : n)
+
+/**
+ * Sets (or clears, with null) how an ingredient is measured in the kitchen.
+ *
+ * What each menu item gets stays the same in portions: a kota keeps its 10
+ * chips when the owner says a potato gives 6 chips instead of 5, and the stock
+ * it takes off changes instead. That is the point of sizing an ingredient once.
+ */
+export function setPortion(s: AppState, productId: string, portion: Portion | null): AppState {
+  const p = productById(s, productId)
+  if (!p) return s
+  const clean = portion && portion.perUnit > 0 && portion.name.trim() ? { ...portion, name: portion.name.trim(), plural: portion.plural.trim() || `${portion.name.trim()}s` } : null
+  const oldPer = p.portion?.perUnit ?? 1
+  const newPer = clean?.perUnit ?? 1
+  return queued(
+    {
+      ...s,
+      products: recosted(
+        s.products.map((x) => {
+          if (x.id === productId) {
+            const { portion: _old, ...rest } = x
+            return clean ? { ...rest, portion: clean } : rest
+          }
+          if (!x.composite || !x.recipe?.some((l) => l.productId === productId) || oldPer === newPer) return x
+          return {
+            ...x,
+            recipe: x.recipe.map((l) => (l.productId === productId ? { ...l, qty: Math.round(((l.qty * oldPer) / newPer) * 10000) / 10000 } : l)),
+          }
+        }),
+      ),
+    },
+    'product',
+    'update',
+  )
 }
 
 export const STATE_KEY = 'stockevo-state-v1'
@@ -206,15 +277,70 @@ export function addOrders(s: AppState, created: Purchase[]): AppState {
   return queued({ ...s, purchases: [...created, ...s.purchases] }, 'purchase')
 }
 
+/**
+ * What one unit costs after buying `qty` more at `unitPrice`: the average of
+ * what is on the shelf at its old cost and what just arrived. Stock at or below
+ * zero (or a cost the shop never knew) carries no weight, so the new price
+ * simply becomes the cost.
+ */
+export function averageCost(onHand: number, cost: number, qty: number, unitPrice: number) {
+  if (!(qty > 0) || !(unitPrice > 0)) return cost
+  const have = Math.max(0, onHand)
+  if (!(cost > 0) || have === 0) return Math.round(unitPrice * 1000) / 1000
+  return Math.round(((have * cost + qty * unitPrice) / (have + qty)) * 1000) / 1000
+}
+
+/**
+ * Made-to-order items cost what their ingredients cost, so when an ingredient's
+ * price moves every item that uses it moves too. Returns the same array when
+ * nothing changed.
+ */
+function recosted(products: Product[]): Product[] {
+  const byId = new Map(products.map((p) => [p.id, p]))
+  let changed = false
+  const out = products.map((p) => {
+    if (!p.composite || !p.recipe?.length) return p
+    const cost = Math.round(p.recipe.reduce((sum, l) => sum + (byId.get(l.productId)?.cost ?? 0) * l.qty, 0) * 100) / 100
+    if (cost === p.cost) return p
+    changed = true
+    return { ...p, cost }
+  })
+  return changed ? out : products
+}
+
 export function receivePurchase(s: AppState, id: string, now = Date.now()): AppState {
   const po = s.purchases.find((p) => p.id === id)
   if (!po || po.status === 'delivered' || po.status === 'cancelled') return s
-  const add = new Map(po.lines.map((l) => [l.productId, l.qty]))
+  // A product can appear on more than one line; each line adds its own stock
+  const bought = new Map<string, { qty: number; value: number }>()
+  for (const l of po.lines) {
+    const b = bought.get(l.productId) ?? { qty: 0, value: 0 }
+    bought.set(l.productId, { qty: b.qty + l.qty, value: b.value + l.qty * l.unitPrice })
+  }
+  const costBefore = new Map<string, number>()
+  const products = recosted(
+    s.products.map((p) => {
+      const b = bought.get(p.id)
+      if (!b) return p
+      const cost = p.composite ? p.cost : averageCost(p.stock, p.cost, b.qty, b.value / b.qty)
+      if (cost !== p.cost) costBefore.set(p.id, p.cost)
+      return { ...p, cost, stock: Math.round((p.stock + b.qty) * 1000) / 1000 }
+    }),
+  )
   return queued(
     {
       ...s,
-      products: s.products.map((p) => (add.has(p.id) ? { ...p, stock: Math.round((p.stock + add.get(p.id)!) * 1000) / 1000 } : p)),
-      purchases: s.purchases.map((p) => (p.id === id ? { ...p, status: 'delivered', receivedAt: now } : p)),
+      products,
+      purchases: s.purchases.map((p) =>
+        p.id === id
+          ? {
+              ...p,
+              status: 'delivered',
+              receivedAt: now,
+              lines: p.lines.map((l) => (costBefore.has(l.productId) ? { ...l, costBefore: costBefore.get(l.productId) } : l)),
+            }
+          : p,
+      ),
     },
     'stock',
     'update',
@@ -259,11 +385,30 @@ export function undoRestock(s: AppState, purchaseIds: string[]): AppState {
   const undo = s.purchases.filter((p) => purchaseIds.includes(p.id) && p.status === 'delivered')
   if (!undo.length) return s
   const take = new Map<string, number>()
-  for (const po of undo) for (const l of po.lines) take.set(l.productId, (take.get(l.productId) ?? 0) + l.qty)
+  // The first line seen for a product carries the cost from before the trip
+  const costBack = new Map<string, number>()
+  for (const po of undo) {
+    for (const l of po.lines) {
+      take.set(l.productId, (take.get(l.productId) ?? 0) + l.qty)
+      if (l.costBefore !== undefined && !costBack.has(l.productId)) costBack.set(l.productId, l.costBefore)
+    }
+  }
+  // A later delivery has moved the cost on since; leave that one alone
+  const received = Math.max(...undo.map((p) => p.receivedAt ?? 0))
+  const movedOn = (productId: string) =>
+    s.purchases.some(
+      (p) => !purchaseIds.includes(p.id) && p.status === 'delivered' && (p.receivedAt ?? 0) > received && p.lines.some((l) => l.productId === productId),
+    )
   return queued(
     {
       ...s,
-      products: s.products.map((p) => (take.has(p.id) ? { ...p, stock: Math.round((p.stock - take.get(p.id)!) * 1000) / 1000 } : p)),
+      products: recosted(
+        s.products.map((p) => {
+          if (!take.has(p.id)) return p
+          const cost = costBack.has(p.id) && !movedOn(p.id) ? costBack.get(p.id)! : p.cost
+          return { ...p, cost, stock: Math.round((p.stock - take.get(p.id)!) * 1000) / 1000 }
+        }),
+      ),
       purchases: s.purchases.filter((p) => !purchaseIds.includes(p.id)),
     },
     'stock',
@@ -346,17 +491,25 @@ export function createProduct(s: AppState, input: ProductInput): Product {
     icon: iconByCategory[input.category],
     sellable: true,
     price: Math.max(0, input.price),
-    cost: 0,
+    cost: Math.max(0, input.cost ?? 0),
     unit,
     unitPlural: input.unitPlural.trim().toLowerCase(),
     stock: Math.max(0, input.stock),
     packSize,
     packLabel: packLabelFor(packSize, unit, input.packName),
+    ...groupFields(input),
   }
 }
 
 export const addProduct = (s: AppState, product: Product): AppState =>
   queued({ ...s, products: [...s.products, product] }, 'product')
+
+/** Puts an edited product in the group the form chose; a form that didn't say leaves it where it was. */
+function regrouped(p: Product, input: ProductInput): Product {
+  if (input.family === undefined) return p
+  const { family: _f, variant: _v, size: _s, ...rest } = p
+  return { ...rest, ...groupFields(input) }
+}
 
 /** Edits an existing product, recomputing the fields derived from category and pack size. */
 export function updateProduct(s: AppState, id: string, input: ProductInput): AppState {
@@ -365,15 +518,16 @@ export function updateProduct(s: AppState, id: string, input: ProductInput): App
   return queued(
     {
       ...s,
-      products: s.products.map((p) =>
+      products: recosted(s.products.map((p) =>
         p.id === id
-          ? {
+          ? regrouped({
               ...p,
               name: input.name.trim(),
               detail: input.detail?.trim() || p.detail,
               category: input.category,
               icon: iconByCategory[input.category],
               price: Math.max(0, input.price),
+              cost: input.cost === undefined ? p.cost : Math.max(0, input.cost),
               // Editing a product never touches its stock: that changes through
               // counts, sales and restocks. Clamping here used to zero an
               // oversold item and wipe its "check this" flag.
@@ -385,9 +539,9 @@ export function updateProduct(s: AppState, id: string, input: ProductInput): App
               // of renaming it to the generic "pack of 10"
               packLabel:
                 input.packName || packSize !== p.packSize ? packLabelFor(packSize, unit, input.packName) : p.packLabel,
-            }
+            }, input)
           : p,
-      ),
+      )),
     },
     'product',
     'update',
@@ -485,6 +639,7 @@ export const setStockCounts = (s: AppState, counts: StockCounts, now = Date.now(
     {
       ...s,
       products: withCounts(s.products, counts).map((p) => (p.soldWithoutRecipe ? { ...p, soldWithoutRecipe: 0 } : p)),
+      lastCountAt: now,
     },
     'stock',
     'update',
@@ -614,6 +769,7 @@ export function buildIngredient(input: IngredientInput): Product {
     stock: 0,
     packSize,
     packLabel: input.packLabel?.trim() || `pack of ${packSize}`,
+    ...(input.portion && input.portion.perUnit > 0 && input.portion.name.trim() ? { portion: input.portion } : {}),
   }
 }
 

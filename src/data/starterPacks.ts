@@ -17,7 +17,7 @@
  * sit a realistic margin behind them, so stock value and profit are not zero
  * on day one.
  */
-import type { CategoryKey, Family, Product, RecipeLine } from './types'
+import type { CategoryKey, Family, Portion, Product, RecipeLine } from './types'
 import { CATEGORIES } from './types'
 
 /** A product before it becomes one: no icon (derived) and no stock (always 0). */
@@ -42,6 +42,7 @@ type Template = {
   size?: string
   priceOptions?: number[]
   untracked?: boolean
+  portion?: Portion
 }
 
 export type PackKey = 'drinks' | 'snacks' | 'bread' | 'groceries' | 'sweets' | 'airtime' | 'kotas'
@@ -266,6 +267,141 @@ export type StarterSelection = {
   packs: PackKey[]
   /** Ids from KOTA_BUILDS. Only read when `packs` includes `kotas`. */
   kotas: string[]
+  /** Pack items the owner unticked: they don't sell it. */
+  exclude?: string[]
+  /** The owner's own selling prices, by product id (pack items and kotas). */
+  prices?: Record<string, number>
+  /** Things the shop sells that no pack has. */
+  extras?: ExtraItem[]
+  /** How the kitchen makes its kotas; sets the recipe amounts. */
+  kitchen?: KitchenAnswers
+}
+
+export type ExtraItem = { name: string; price: number }
+
+// ---------------------------------------------------------------------------
+// How the kitchen makes it
+// ---------------------------------------------------------------------------
+
+/**
+ * Recipe amounts asked in the owner's own terms — "a loaf makes 4 kotas", not
+ * "0.25 loaf". Only the fuzzy ingredients are asked: a russian is one russian,
+ * and asking would only slow setup down. Each answer scales that ingredient in
+ * every kota by the same amount, so a Cheese Kota keeps twice the cheese of a
+ * Kota Special.
+ *
+ * `standard` is the amount in a normal kota (in stock units), and the answer
+ * is turned back into one: "makes" = `base` ÷ answer, "each" = the answer.
+ */
+export type KitchenQuestion = {
+  id: string
+  kind: 'makes' | 'each'
+  /** "One loaf makes about" / "Cheese slices on a kota". */
+  label: string
+  /** What the number counts: "kotas", "slices". */
+  after: string
+  standard: number
+  /** Stock units the "makes" answer is out of: 1 loaf, 1 kg roll. */
+  base: number
+}
+
+export const KITCHEN_QUESTIONS: KitchenQuestion[] = [
+  { id: 'bread', kind: 'makes', label: 'One loaf makes about', after: 'kotas', standard: 0.25, base: 1 },
+  { id: 'polony', kind: 'makes', label: 'A 1 kg roll of polony does about', after: 'kotas', standard: 0.05, base: 1 },
+  { id: 'cheese-slice', kind: 'each', label: 'Cheese slices on a normal kota', after: 'slices', standard: 1, base: 1 },
+  { id: 'atchar', kind: 'makes', label: 'A 1 kg tub of atchar does about', after: 'kotas', standard: 0.02, base: 1 },
+]
+
+/** Chips are asked apart: bought cut and frozen, or cut from potatoes in the shop. */
+export type ChipsAnswer =
+  | { mode: 'bag'; kotasPerBag: number }
+  | { mode: 'potato'; chipsPerPotato: number; chipsPerKota: number; potatoesPerBag: number }
+
+export type KitchenAnswers = {
+  /** By KitchenQuestion id: the number the owner gave. */
+  answers?: Record<string, number>
+  chips?: ChipsAnswer
+}
+
+/** A normal kota's chips in the recipes below, and the frozen bag they come from. */
+const CHIPS_STANDARD = 0.15
+const CHIPS_BAG_KG = 2
+
+/** The answers that leave the recipes as they are — what the questions start filled in with. */
+export function defaultKitchen(): Required<KitchenAnswers> {
+  const answers: Record<string, number> = {}
+  for (const q of KITCHEN_QUESTIONS) answers[q.id] = Math.round(q.kind === 'makes' ? q.base / q.standard : q.standard)
+  return { answers, chips: { mode: 'bag', kotasPerBag: Math.round(CHIPS_BAG_KG / CHIPS_STANDARD) } }
+}
+
+/**
+ * Starting numbers when the owner says they cut their own: the ones a kota stand
+ * owner gave as an example. Shown in the fields, always meant to be changed.
+ */
+export const POTATO_DEFAULTS = { chipsPerPotato: 5, chipsPerKota: 10, potatoesPerBag: 30 }
+
+/** How much more (or less) of an ingredient the owner's answer means, against the recipes as written. */
+function factorFor(q: KitchenQuestion, answer: number | undefined) {
+  if (!(answer && answer > 0)) return 1
+  return (q.kind === 'makes' ? q.base / answer : answer) / q.standard
+}
+
+const round4 = (n: number) => Math.round(n * 10000) / 10000
+
+/** One build's recipe as this kitchen makes it. Potato chips swap the frozen chips for potatoes. */
+function kitchenRecipe(recipe: RecipeLine[], k: KitchenAnswers | undefined): RecipeLine[] {
+  if (!k) return recipe
+  return recipe.map((l) => {
+    if (l.productId === 'fries' && k.chips) {
+      // This kota's chips against a normal one: Russian & Chips gets a bigger portion
+      const share = l.qty / CHIPS_STANDARD
+      if (k.chips.mode === 'potato') {
+        const { chipsPerKota, chipsPerPotato } = k.chips
+        return { productId: 'potato', qty: round4((share * chipsPerKota) / Math.max(1, chipsPerPotato)) }
+      }
+      return { productId: 'fries', qty: round4((share * CHIPS_BAG_KG) / Math.max(1, k.chips.kotasPerBag)) }
+    }
+    const q = KITCHEN_QUESTIONS.find((x) => x.id === l.productId)
+    return q ? { ...l, qty: round4(l.qty * factorFor(q, k.answers?.[q.id])) } : l
+  })
+}
+
+/** Potatoes, sized the way the owner described them: counted whole, served as chips. */
+function potatoTemplate(c: Extract<ChipsAnswer, { mode: 'potato' }>): Template {
+  const perBag = Math.max(1, Math.round(c.potatoesPerBag))
+  return {
+    id: 'potato',
+    name: 'Potatoes',
+    detail: 'For cutting chips',
+    category: 'ingredients',
+    price: 0,
+    // Not guessed: what a bag costs varies too much. It comes in with the first restock
+    cost: 0,
+    unit: 'potato',
+    unitPlural: 'potatoes',
+    packSize: perBag,
+    packLabel: `bag of ${perBag}`,
+    sellable: false,
+    portion: { name: 'chip', plural: 'chips', perUnit: Math.max(1, c.chipsPerPotato) },
+  }
+}
+
+const slug = (s: string) => s.trim().toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '')
+
+/** One of the owner's own items: sold as it is, counted one at a time. */
+function extraTemplate(e: ExtraItem, i: number): Template {
+  return {
+    id: `own-${slug(e.name) || i}`,
+    name: e.name.trim(),
+    detail: 'Added by you',
+    category: 'other',
+    price: Math.max(0, e.price),
+    cost: 0,
+    unit: 'item',
+    unitPlural: 'items',
+    packSize: 1,
+    packLabel: 'single item',
+  }
 }
 
 const iconFor = (category: CategoryKey) => CATEGORIES.find((c) => c.key === category)?.icon ?? 'inventory_2'
@@ -291,6 +427,7 @@ function toProduct(t: Template): Product {
     ...(t.size ? { size: t.size } : {}),
     ...(t.priceOptions ? { priceOptions: t.priceOptions } : {}),
     ...(t.untracked ? { untracked: true } : {}),
+    ...(t.portion ? { portion: t.portion } : {}),
   }
 }
 
@@ -308,18 +445,29 @@ export function buildStarterCatalogue(sel: StarterSelection): Product[] {
     if (!byId.has(t.id)) byId.set(t.id, toProduct(t))
   }
 
+  const excluded = new Set(sel.exclude ?? [])
   for (const pack of PACKS) {
-    if (sel.packs.includes(pack.key)) pack.products.forEach(add)
+    if (sel.packs.includes(pack.key)) pack.products.filter((t) => !excluded.has(t.id)).forEach(add)
   }
+  ;(sel.extras ?? []).filter((e) => e.name.trim()).forEach((e, i) => add(extraTemplate(e, i)))
 
-  if (!sel.packs.includes('kotas') || sel.kotas.length === 0) return [...byId.values()]
+  const finish = () => withPrices([...byId.values()], sel.prices)
+  if (!sel.packs.includes('kotas') || sel.kotas.length === 0) return finish()
 
-  const builds = KOTA_BUILDS.filter((b) => sel.kotas.includes(b.id))
+  const builds = KOTA_BUILDS.filter((b) => sel.kotas.includes(b.id)).map((b) => ({
+    ...b,
+    recipe: kitchenRecipe(b.recipe, sel.kitchen),
+  }))
 
   // Ingredients first, so a recipe never points at a product that is not in the
   // catalogue yet and the cost below can be worked out from them
   const needed = new Set(builds.flatMap((b) => b.recipe.map((l) => l.productId)))
-  KOTA_INGREDIENTS.filter((t) => needed.has(t.id)).forEach(add)
+  const chips = sel.kitchen?.chips
+  const ingredients = [...KOTA_INGREDIENTS, ...(chips?.mode === 'potato' ? [potatoTemplate(chips)] : [])]
+  for (const t of ingredients.filter((x) => needed.has(x.id))) {
+    // A loaf unticked in the bread pack is still cut for kotas — just not sold whole
+    add(excluded.has(t.id) ? { ...t, sellable: false } : t)
+  }
 
   for (const build of builds) {
     const cost = build.recipe.reduce((sum, line) => {
@@ -348,7 +496,59 @@ export function buildStarterCatalogue(sel: StarterSelection): Product[] {
     })
   }
 
-  return [...byId.values()]
+  return finish()
+}
+
+/** The owner's own selling prices over the usual ones. Airtime's price is the amount picked at the counter, so it is left alone. */
+function withPrices(products: Product[], prices: Record<string, number> | undefined): Product[] {
+  if (!prices) return products
+  return products.map((p) => {
+    const price = prices[p.id]
+    return price !== undefined && Number.isFinite(price) && price >= 0 && !p.priceOptions ? { ...p, price } : p
+  })
+}
+
+/**
+ * The "Add common brands?" offer: the bread and cold drinks that share a Sell
+ * tile, as product inputs, minus any the shop already has. Only ever added when
+ * the owner says yes — a real shop's catalogue is theirs.
+ */
+export function commonBrands(existing: Product[]): ProductInputLike[] {
+  const have = new Set(existing.map((p) => p.name.toLowerCase()))
+  return [...BREAD, ...DRINKS]
+    .filter((t) => (t.family === 'bread' || t.family === 'colddrink') && !have.has(t.name.toLowerCase()))
+    .map((t) => ({
+      name: t.name,
+      detail: t.detail,
+      category: t.category,
+      price: t.price,
+      cost: t.cost,
+      stock: 0,
+      unit: t.unit,
+      unitPlural: t.unitPlural,
+      packSize: t.packSize,
+      packName: t.packLabel.split(/\s+/)[0],
+      family: t.family as 'bread' | 'colddrink',
+      variant: t.variant,
+      size: t.size,
+    }))
+}
+
+/** Mirrors ProductInput in actions.ts, which imports this file. */
+type ProductInputLike = {
+  name: string
+  detail?: string
+  category: CategoryKey
+  price: number
+  cost?: number
+  stock: number
+  unit: string
+  unitPlural: string
+  packSize: number
+  packName?: string
+  family?: 'bread' | 'colddrink' | null
+  variant?: string
+  size?: string
 }
 
 /** How many products a selection will create, for the label on the last step. */

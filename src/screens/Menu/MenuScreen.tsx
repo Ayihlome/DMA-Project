@@ -7,6 +7,7 @@ import PrimaryButton from '../../components/ui/PrimaryButton'
 import { useStore } from '../../store'
 import type { Product } from '../../data/types'
 import { colors, fonts, money, space, type } from '../../theme/tokens'
+import { marginOf } from '../Profit/profitModel'
 import MenuItemSheet, { type MenuEdit } from './MenuItemSheet'
 
 const SIDE = 28
@@ -16,7 +17,9 @@ const NO_GROUP = 'No group yet'
 /** "R35,00 · 3 ingredients" — and says so plainly when there are none. */
 function detailFor(p: Product) {
   const n = p.recipe?.length ?? 0
-  return `${money(p.price)} · ${n === 0 ? 'no ingredients yet — nothing comes off stock' : `${n} ingredient${n === 1 ? '' : 's'}`}`
+  if (n === 0) return `${money(p.price)} · no ingredients yet — nothing comes off stock`
+  const margin = marginOf(p)
+  return `${money(p.price)} · ${margin ? `keep about ${money(margin.keep)} · ` : ''}${n} ingredient${n === 1 ? '' : 's'}`
 }
 
 /**

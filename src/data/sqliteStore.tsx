@@ -24,7 +24,7 @@ import type { AppState } from './types'
 import type { BackupStatus } from '../lib/cloudBackup'
 import { StoreContext } from '../store'
 import { useCases } from '../backend/useCases/container'
-import { demoShop, emptyShop, failed, newId, persistChange, persistSale, persistVoid, uuidify } from './sqlitePersist'
+import { demoShop, emptyShop, failed, newId, persistChange, persistCosts, persistSale, persistVoid, uuidify } from './sqlitePersist'
 const SYNC_EVERY_MS = 60_000
 
 export function SqliteStoreProvider({
@@ -44,12 +44,17 @@ export function SqliteStoreProvider({
   // The newest state, readable right after an action. Actions run one after another on the JS
   // thread, so each one starts from the result of the last.
   const ref = useRef<AppState | null>(null)
+  // Kept in step after each render, for actions and timers that run later
   const photosRef = useRef(photos)
-  photosRef.current = photos
   const ownerRef = useRef(ownerId)
-  ownerRef.current = ownerId
   const onlineRef = useRef(online)
-  onlineRef.current = online
+  useEffect(() => {
+    photosRef.current = photos
+    ownerRef.current = ownerId
+    onlineRef.current = online
+  }, [photos, ownerId, online])
+  // Whose shop `state` is. Switching accounts shows the fallback until the new shop has loaded.
+  const [stateOwner, setStateOwner] = useState<string | null>(null)
   const jobs = useRef(0)
   const chain = useRef<Promise<unknown>>(Promise.resolve())
   const syncing = useRef(false)
@@ -117,8 +122,8 @@ export function SqliteStoreProvider({
   useEffect(() => {
     if (!ownerId) return
     let alive = true
+    // Actions and refreshes wait for the new shop; the screen waits on stateOwner below
     ref.current = null
-    setState(null)
     ;(async () => {
       try {
         const claim = await useCases.claimDevice({ ownerID: ownerId })
@@ -127,6 +132,7 @@ export function SqliteStoreProvider({
         const shop = await useCases.loadShop()
         if (!alive) return
         commit(shop)
+        setStateOwner(ownerId)
         if (claim.cleared) AsyncStorage.removeItem(A.PHOTO_KEY).catch(() => {})
         try {
           setPhotos(!claim.cleared && rawPhotos ? JSON.parse(rawPhotos) : {})
@@ -135,7 +141,10 @@ export function SqliteStoreProvider({
         }
       } catch (e) {
         console.error('[sqliteStore] could not open the shop', e)
-        if (alive) commit(emptyShop())
+        if (alive) {
+          commit(emptyShop())
+          setStateOwner(ownerId)
+        }
       }
     })()
     return () => {
@@ -146,7 +155,9 @@ export function SqliteStoreProvider({
   useEffect(() => NetInfo.addEventListener((s) => setOnline(s.isConnected !== false && s.isInternetReachable !== false)), [])
 
   // Send queued rows when we come online, and every minute after.
-  const ready = state !== null
+  // Only this owner's shop: during an account switch `state` still holds the last one
+  const shown = state && stateOwner === ownerId ? state : null
+  const ready = shown !== null
   useEffect(() => {
     if (!ready || !online || !ownerId) return
     void sync()
@@ -184,9 +195,16 @@ export function SqliteStoreProvider({
       enqueue(async () => failed(await call(), what))
     }
 
+    /** An order change: the order use case first, then the costs that came with it. */
+    const saveOrder = (next: AppState, what: string, call: () => Promise<{ success?: boolean; errors?: string[] } | undefined>) => {
+      const prev = cur()
+      commit(next)
+      enqueue(async () => [...failed(await call(), what), ...(await persistCosts(useCases, prev, next))])
+    }
+
     const api: Pick<
       A.StoreApi,
-      | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'createOrderList'
+      | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'setPortion' | 'createOrderList'
       | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'voidSale' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
       | 'setBudget' | 'updateProfile' | 'finishOnboarding' | 'skipOnboarding' | 'setStockCounts' | 'resetDemoData'
     > = {
@@ -230,11 +248,17 @@ export function SqliteStoreProvider({
             packSize: product.packSize,
             packLabel: product.packLabel,
             cost: product.cost,
+            portion: product.portion,
           }),
         )
         return product
       },
-      setStockCounts: (counts) => save(A.setStockCounts(cur(), counts), 'setStockCounts', () => useCases.setStockCounts({ counts })),
+      // The portion is in the product's meta and the rescaled recipes are recipe rows; persistChange writes both
+      setPortion: (productId, portion) => change((s) => A.setPortion(s, productId, portion)),
+      setStockCounts: (counts) => {
+        const next = A.setStockCounts(cur(), counts)
+        save(next, 'setStockCounts', () => useCases.setStockCounts({ counts, at: next.lastCountAt }))
+      },
       upsertSupplierPrice: (input) => change((s) => A.upsertSupplierPrice(s, input)),
 
       finishOnboarding: (sel, profile, counts) => {
@@ -265,7 +289,7 @@ export function SqliteStoreProvider({
       },
       receivePurchase: (id) => {
         const next = A.receivePurchase(cur(), id)
-        if (next !== cur()) save(next, 'receivePurchaseOrder', () => useCases.receivePurchaseOrder({ id, receivedAt: Date.now() }))
+        if (next !== cur()) saveOrder(next, 'receivePurchaseOrder', () => useCases.receivePurchaseOrder({ id, receivedAt: Date.now() }))
       },
       // "Bought it": the purchases are recorded as delivered and the stock goes in, in one write
       receiveRestock: (lines) => {
@@ -275,7 +299,7 @@ export function SqliteStoreProvider({
         const next = A.receivePlanned(cur(), created)
         const ids = created.map((po) => po.id)
         const delivered = next.purchases.filter((p) => ids.includes(p.id))
-        save(next, 'savePurchaseOrders', () => useCases.savePurchaseOrders({ orders: delivered }))
+        saveOrder(next, 'savePurchaseOrders', () => useCases.savePurchaseOrders({ orders: delivered }))
         return ids
       },
       // Undo takes the stock back out; the trip's lines say how much, and the count may end up below zero
@@ -283,7 +307,7 @@ export function SqliteStoreProvider({
         const next = A.undoRestock(cur(), ids)
         if (next === cur()) return
         const gone = cur().purchases.filter((p) => ids.includes(p.id)).map((p) => p.id)
-        save(next, 'undoPurchaseOrders', () => useCases.undoPurchaseOrders({ ids: gone }))
+        saveOrder(next, 'undoPurchaseOrders', () => useCases.undoPurchaseOrders({ ids: gone }))
       },
       setRestockDay: (day) => {
         const next = A.setRestockDay(cur(), day)
@@ -344,21 +368,22 @@ export function SqliteStoreProvider({
 
   const value = useMemo<A.StoreApi | null>(
     () =>
-      state && {
+      shown && {
         ...actions,
-        state,
+        state: shown,
         photos,
         online,
-        pending: A.pendingCount(state),
+        pending: A.pendingCount(shown),
         backupStatus,
         backUpNow: () => void sync(true),
         setPhoto,
         removePhoto,
       },
-    [state, photos, online, backupStatus, actions, sync, setPhoto, removePhoto],
+    [shown, photos, online, backupStatus, actions, sync, setPhoto, removePhoto],
   )
 
   if (!ownerId) return <>{children}</>
-  if (!value) return <>{fallback}</>
+  // `value` is `shown && {…}`, so testing `shown` is the same test
+  if (!shown) return <>{fallback}</>
   return <StoreContext.Provider value={value}>{children}</StoreContext.Provider>
 }

@@ -127,6 +127,8 @@ export function createLoadShopUseCase({
           ...(m.size ? { size: m.size } : {}),
           ...(m.priceOptions ? { priceOptions: m.priceOptions } : {}),
           ...(m.untracked ? { untracked: true } : {}),
+          // How the kitchen measures it (see Product.portion); recipes stay in stock units
+          ...(m.portion ? { portion: m.portion } : {}),
           ...(row.sold_without_recipe > 0
             ? { soldWithoutRecipe: Number(row.sold_without_recipe) }
             : {}),
@@ -189,6 +191,9 @@ export function createLoadShopUseCase({
         (products.length ? Date.now() : null),
       ...(settings.restockDay != null
         ? { restockDay: json(settings.restockDay, undefined) }
+        : {}),
+      ...(settings.lastCountAt != null
+        ? { lastCountAt: json(settings.lastCountAt, undefined) }
         : {}),
       ...(settings.sellGrid
         ? { sellGrid: json(settings.sellGrid, undefined) }

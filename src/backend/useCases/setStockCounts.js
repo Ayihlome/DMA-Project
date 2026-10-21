@@ -1,17 +1,23 @@
+import { SETTINGS_KEYS } from "../Repositories/DeviceSettingsRepo";
+
 /**
  * A stock count: sets the quantity on hand for the products the owner counted.
  *
- * Input:  { counts: { [productID]: number } }
+ * Input:  { counts: { [productID]: number }, at?: number }   // at: when the count was saved (ms)
  * Output (success): { success: true, updated: StockItem[], skipped: { productID, reason }[] }
  * Output (failure): { success: false, errors: string[] }
  *
  * Made-to-order (composite) products are skipped, their stock comes from their ingredients.
  * A count never goes below 0. Saving a count also clears every "sold without a recipe" flag,
  * because that is what puts the ingredient numbers right again.
+ *
+ * The time of the count is kept too: the next count checks the recipes against what was sold
+ * since this one (see src/data/recipeCheck.ts).
  */
 export function createSetStockCountsUseCase({
   productRepository,
   stockRepository,
+  deviceSettingsRepository,
 }) {
   return async function setStockCounts(input) {
     const counts = input?.counts;
@@ -60,6 +66,13 @@ export function createSetStockCountsUseCase({
         if (product.sold_without_recipe > 0) {
           await productRepository.setSoldWithoutRecipe(product.id, 0);
         }
+      }
+
+      if (deviceSettingsRepository) {
+        await deviceSettingsRepository.setJSON(
+          SETTINGS_KEYS.lastCountAt,
+          Number.isFinite(input.at) ? input.at : Date.now(),
+        );
       }
 
       return { success: true, updated, skipped };

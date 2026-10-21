@@ -10,6 +10,7 @@ export const SETTINGS_KEYS = {
   budget: "budget",
   preferredSuppliers: "preferred",
   restockDay: "restockDay",
+  lastCountAt: "lastCountAt",
   ownerId: "owner", // DeviceRepo.setOwner stores the signed-in account under this key
 };
 

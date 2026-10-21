@@ -29,6 +29,9 @@ const parse = (t: string) => {
 /** The pack word for prompts: "crate", "tray" — or the unit when bought singly. */
 const packWord = (p: Product) => (p.packSize > 1 ? p.packLabel.split(/\s+/)[0]?.toLowerCase() || 'pack' : p.unit)
 
+/** What the stepper counts on a row: packs, or single units when it is switched to loose. */
+const countWord = (p: Product, isLoose: boolean) => (isLoose ? p.unit : packWord(p))
+
 /**
  * Stock came in: record a delivery or a shopping trip — any item, any amount,
  * not just what Restock suggested. It's also the moment the price is in front
@@ -41,7 +44,9 @@ export default function StockInScreen() {
 
   const [supplierId, setSupplierId] = useState<string | null>(null)
   const [query, setQuery] = useState('')
+  // How many of each: counted in packs, or in singles for the rows switched to "Loose"
   const [packs, setPacks] = useState<Record<string, number>>({})
+  const [loose, setLoose] = useState<Record<string, boolean>>({})
   const [paid, setPaid] = useState<Record<string, string>>({})
   const [toast, setToast] = useState<Toast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
@@ -56,17 +61,20 @@ export default function StockInScreen() {
       .sort((a, b) => a.name.localeCompare(b.name))
   }, [store.state, query])
 
-  /** Per-unit price to record: what was typed (per pack), else this supplier's, else the cheapest, else average cost. */
+  /** Units in one step of the stepper: a whole pack, or one loose unit. */
+  const perStep = (p: Product) => (loose[p.id] ? 1 : Math.max(1, p.packSize))
+
+  /** Per-unit price to record: what was typed (per pack, or per unit when loose), else this supplier's, else the cheapest, else average cost. */
   const unitPriceFor = (p: Product) => {
     const typed = parse(paid[p.id] ?? '')
-    if (typed > 0) return Math.round((typed / Math.max(1, p.packSize)) * 100) / 100
+    if (typed > 0) return Math.round((typed / perStep(p)) * 100) / 100
     const prices = pricesFor(store.state, p.id)
     const known = prices.find((x) => x.supplierId === supplierId) ?? prices[0]
     return known?.unitPrice ?? p.cost
   }
 
   const chosen = stockItems(store.state).filter((p) => (packs[p.id] ?? 0) > 0)
-  const total = chosen.reduce((t, p) => t + (packs[p.id] ?? 0) * p.packSize * unitPriceFor(p), 0)
+  const total = chosen.reduce((t, p) => t + (packs[p.id] ?? 0) * perStep(p) * unitPriceFor(p), 0)
 
   const step = (p: Product, by: -1 | 1) => {
     const next = Math.max(0, (packs[p.id] ?? 0) + by)
@@ -81,7 +89,7 @@ export default function StockInScreen() {
       chosen.map((p) => ({
         productId: p.id,
         supplierId: supplierId ?? '',
-        qty: (packs[p.id] ?? 0) * p.packSize,
+        qty: (packs[p.id] ?? 0) * perStep(p),
         unitPrice: unitPriceFor(p),
       })),
     )
@@ -102,6 +110,7 @@ export default function StockInScreen() {
       action: { label: 'Undo', onPress: () => store.undoRestock(ids) },
     })
     setPacks({})
+    setLoose({})
     setPaid({})
   }
 
@@ -156,13 +165,13 @@ export default function StockInScreen() {
                   </Text>
                 </View>
                 <View style={styles.stepper}>
-                  <PressableScale onPress={() => step(p, -1)} disabled={n === 0} accessibilityLabel={`One ${packWord(p)} fewer of ${p.name}`} style={[styles.stepBtn, n === 0 && styles.stepOff]}>
+                  <PressableScale onPress={() => step(p, -1)} disabled={n === 0} accessibilityLabel={`One ${countWord(p, !!loose[p.id])} fewer of ${p.name}`} style={[styles.stepBtn, n === 0 && styles.stepOff]}>
                     <MaterialIcon name="remove" size={18} color={colors.ink} />
                   </PressableScale>
                   <View style={styles.stepQty}>
                     <RollingNumber value={String(n)} style={styles.stepQtyText} />
                   </View>
-                  <PressableScale onPress={() => step(p, 1)} accessibilityLabel={`One ${packWord(p)} more of ${p.name}`} style={[styles.stepBtn, styles.stepPlus]}>
+                  <PressableScale onPress={() => step(p, 1)} accessibilityLabel={`One ${countWord(p, !!loose[p.id])} more of ${p.name}`} style={[styles.stepBtn, styles.stepPlus]}>
                     <MaterialIcon name="add" size={18} color={colors.ink} />
                   </PressableScale>
                 </View>
@@ -170,17 +179,38 @@ export default function StockInScreen() {
 
               {n > 0 ? (
                 <Animated.View entering={OPEN} exiting={CLOSE} style={styles.paidRow}>
-                  <Text style={styles.paidLabel}>{`${packText(p, n)} · paid per ${packWord(p)}`}</Text>
+                  {/* Only things bought in packs have a second way to count them */}
+                  {p.packSize > 1 ? (
+                    <PressableScale
+                      onPress={() => {
+                        Haptics.selectionAsync()
+                        setLoose((m) => ({ ...m, [p.id]: !m[p.id] }))
+                        // What was typed was per pack or per unit; it no longer means the same thing
+                        setPaid((m) => ({ ...m, [p.id]: '' }))
+                      }}
+                      accessibilityRole="button"
+                      accessibilityLabel={loose[p.id] ? `Count ${p.name} in ${packWord(p)}s instead` : `Count ${p.name} as loose ${p.unitPlural} instead`}
+                      style={[styles.chip, styles.looseChip, loose[p.id] && styles.chipOn]}
+                      hitSlop={6}
+                    >
+                      <Text style={styles.chipText}>{loose[p.id] ? 'Loose' : 'Packs'}</Text>
+                    </PressableScale>
+                  ) : null}
+                  <Text style={styles.paidLabel}>
+                    {loose[p.id]
+                      ? `${n} ${n === 1 ? p.unit : p.unitPlural} · paid per ${p.unit}`
+                      : `${packText(p, n)} · paid per ${packWord(p)}`}
+                  </Text>
                   <View style={styles.paidField}>
                     <Text style={styles.paidR}>R</Text>
                     <TextInput
                       value={paid[p.id] ?? ''}
                       onChangeText={(t) => setPaid((m) => ({ ...m, [p.id]: t }))}
                       keyboardType="decimal-pad"
-                      placeholder={String(Math.round(unitPriceFor(p) * p.packSize * 100) / 100)}
+                      placeholder={String(Math.round(unitPriceFor(p) * perStep(p) * 100) / 100)}
                       placeholderTextColor={colors.quiet}
                       style={styles.paidInput}
-                      accessibilityLabel={`Paid per ${packWord(p)} for ${p.name}`}
+                      accessibilityLabel={`Paid per ${countWord(p, !!loose[p.id])} for ${p.name}`}
                     />
                   </View>
                 </Animated.View>
@@ -226,6 +256,7 @@ const styles = StyleSheet.create({
   },
   chipOn: { backgroundColor: colors.brandSoft, borderColor: colors.ink },
   chipText: { fontFamily: fonts.bold, fontSize: 14, color: colors.ink },
+  looseChip: { height: 32, paddingHorizontal: space.md },
   search: { marginTop: space.lg, marginBottom: space.sm },
 
   row: { flexDirection: 'row', alignItems: 'center', gap: space.md, paddingVertical: 14 },

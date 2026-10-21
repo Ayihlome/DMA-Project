@@ -9,6 +9,7 @@ import RollingNumber from '../../components/ui/RollingNumber'
 import { useStore } from '../../store'
 import { colors, fonts, money, radius, space } from '../../theme/tokens'
 import { homeSummary, salesLine } from './homeModel'
+import { commonBrands } from '../../data/starterPacks'
 
 /** Spec: header height 300. */
 const HEADER = 300
@@ -23,6 +24,21 @@ const HEADER = 300
 export default function HomeScreen() {
   const store = useStore()
   const summary = useMemo(() => homeSummary(store.state), [store.state])
+  const menuCount = useMemo(() => store.state.products.filter((p) => p.composite && p.sellable).length, [store.state.products])
+
+  // Asked once, only of a shop with no Bread or Cold drink tile: real catalogues are the owner's
+  const offer = store.state.sellGrid?.brandsOffer
+  const brands = useMemo(
+    () =>
+      offer || store.state.products.some((p) => p.family === 'bread' || p.family === 'colddrink')
+        ? []
+        : commonBrands(store.state.products),
+    [offer, store.state.products],
+  )
+  const addBrands = () => {
+    for (const input of brands) store.addProduct(input)
+    store.updateSellGrid({ brandsOffer: 'added' })
+  }
   const initial = (store.state.profile.ownerName.trim()[0] ?? '?').toUpperCase()
 
   return (
@@ -63,6 +79,34 @@ export default function HomeScreen() {
     >
       <PrimaryButton label="New sale" height={64} onPress={() => router.navigate('/sales')} />
 
+      {brands.length ? (
+        <View style={styles.offer} accessibilityRole="summary">
+          <Text style={styles.offerTitle}>Add common brands?</Text>
+          <Text style={styles.offerText}>
+            White and brown bread, Coke and Fanta, each with its own Bread or Cold drink tile on Sell. Prices are rough;
+            change them after.
+          </Text>
+          <View style={styles.offerRow}>
+            <PressableScale
+              onPress={() => store.updateSellGrid({ brandsOffer: 'dismissed' })}
+              containerStyle={styles.flex}
+              style={styles.offerNo}
+              accessibilityLabel="No thanks, don't add common brands"
+            >
+              <Text style={styles.offerBtnText}>No thanks</Text>
+            </PressableScale>
+            <PressableScale
+              onPress={addBrands}
+              containerStyle={styles.flex}
+              style={styles.offerYes}
+              accessibilityLabel={`Add ${brands.length} common brands`}
+            >
+              <Text style={styles.offerBtnText}>{`Add ${brands.length}`}</Text>
+            </PressableScale>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.rows}>
         {summary.uncounted ? (
           <ListRow
@@ -87,6 +131,13 @@ export default function HomeScreen() {
           title="Count stock"
           detail={summary.toCheck > 0 ? `${summary.toCheck} to check first` : undefined}
           onPress={() => router.push('/count-stock')}
+        />
+
+        {/* Recipes are what take ingredients off stock, so changing them is a daily job, not a setting */}
+        <ListRow
+          title="Menu"
+          detail={menuCount ? `${menuCount} item${menuCount === 1 ? '' : 's'} · prices and ingredients` : 'Add food you make'}
+          onPress={() => router.push('/menu')}
           last
         />
       </View>
@@ -95,6 +146,14 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  offer: { gap: space.sm, padding: space.lg, borderRadius: 16, backgroundColor: colors.brandSoft, marginTop: space.lg },
+  offerTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
+  offerText: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19, color: colors.ink },
+  offerRow: { flexDirection: 'row', gap: space.sm, marginTop: space.xs },
+  offerNo: { height: 44, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  offerYes: { height: 44, borderRadius: radius.md, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
+  offerBtnText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   header: { flex: 1, paddingTop: space.lg, paddingBottom: 44, justifyContent: 'space-between' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   today: { fontFamily: fonts.bold, fontSize: 17, color: colors.ink },

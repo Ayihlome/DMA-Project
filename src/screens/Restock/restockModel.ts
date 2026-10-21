@@ -110,7 +110,3 @@ export function packText(p: Product, n: number) {
   if (n === 1) return `1 ${word}`
   return `${n} ${/(s|x|ch|sh)$/.test(word) ? `${word}es` : `${word}s`}`
 }
-
-/** Cost of buying `packs` of an item. */
-export const lineCost = (it: RestockItem, packs: number) =>
-  Math.round(packs * it.product.packSize * it.unitPrice * 100) / 100

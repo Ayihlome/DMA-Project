@@ -2,6 +2,9 @@ export type CategoryKey = 'bakery' | 'dairy' | 'pantry' | 'hot' | 'beverages' | 
 
 export type RecipeLine = { productId: string; qty: number }
 
+/** "1 potato = 5 chips": `{ name: 'chip', plural: 'chips', perUnit: 5 }`. */
+export type Portion = { name: string; plural: string; perUnit: number }
+
 export type Product = {
   id: string
   name: string
@@ -49,6 +52,15 @@ export type Product = {
    * never shown as low, never in a count or a restock list.
    */
   untracked?: boolean
+  /**
+   * How the kitchen measures this ingredient, when that is not how it is counted:
+   * potatoes are counted whole but served as chips, polony is counted by the kilo
+   * but served in slices. `perUnit` portions come out of one stock unit.
+   *
+   * Recipes are still stored in stock units, so nothing that deducts stock has to
+   * know about portions; the menu editor shows and takes portions instead.
+   */
+  portion?: Portion
   /**
    * How many times this composite has been sold while it had no recipe. Those
    * sales deducted no ingredients, so its ingredient stock is off by that much.
@@ -127,10 +139,22 @@ export type SellGridSettings = {
   lastUsed: Record<string, string>
   /** Last airtime amount sold per airtime product, so the picker can lead with it. */
   lastAmount?: Record<string, number>
+  /** The one-time "Add common brands?" card on Home: answered, so it doesn't come back. */
+  brandsOffer?: 'added' | 'dismissed'
 }
 
 export type PurchaseStatus = 'planned' | 'in_transit' | 'delivered' | 'cancelled'
-export type PurchaseLine = { productId: string; qty: number; unitPrice: number }
+export type PurchaseLine = {
+  productId: string
+  qty: number
+  unitPrice: number
+  /**
+   * The product's cost just before this line was received, so Undo can put it
+   * back. Screen state only: it is not saved, and Undo only ever follows a
+   * purchase made a moment ago.
+   */
+  costBefore?: number
+}
 export type Purchase = {
   id: string
   at: number
@@ -175,6 +199,11 @@ export type AppState = {
    * seeded with demo data, so "has sales" alone would mark it as set up.
    */
   onboardedAt?: number | null
+  /**
+   * When the owner last saved a stock count. The next count compares the shelf
+   * with what the recipes took off since then. Absent = since setup.
+   */
+  lastCountAt?: number
   /** Absent on shops saved before the Sell grid existed; treated as defaults. */
   sellGrid?: SellGridSettings
   /** Day the owner goes shopping, 0 = Sunday … 6 = Saturday. Absent = Thursday. */

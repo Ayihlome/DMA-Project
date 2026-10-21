@@ -135,6 +135,7 @@ const rawUseCases = {
   setStockCounts: createSetStockCountsUseCase({
     productRepository,
     stockRepository,
+    deviceSettingsRepository,
   }),
   createProduct: createCreateProductUseCase({ productRepository }),
   createSupplier,

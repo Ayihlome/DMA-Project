@@ -14,7 +14,7 @@ import { useTabBarSpace } from '../../components/nav/TabBar'
 import { stockUncounted } from '../../data/inventory'
 import { useStore } from '../../store'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
-import { groupBySupplier, lineCost, packText, restockDayName, restockList, type RestockItem } from './restockModel'
+import { groupBySupplier, packText, restockDayName, restockList, type RestockItem } from './restockModel'
 
 const SIDE = 28
 
@@ -47,9 +47,26 @@ export default function RestockScreen() {
   const [toast, setToast] = useState<Toast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
 
-  const packsFor = (it: RestockItem) => packs[it.product.id] ?? it.packs
+  // Rows switched to "Loose" count single units instead of packs — the owner bought 3 loaves, not a crate
+  const [loose, setLoose] = useState<Record<string, boolean>>({})
+
+  /** What the stepper shows: packs, or units on a loose row. */
+  const packsFor = (it: RestockItem) =>
+    packs[it.product.id] ?? (loose[it.product.id] ? it.packs * it.product.packSize : it.packs)
+  /** Units actually bought. */
+  const qtyFor = (it: RestockItem) => packsFor(it) * (loose[it.product.id] ? 1 : it.product.packSize)
   const ticked = items.filter((it) => !unticked.has(it.product.id))
-  const total = ticked.reduce((t, it) => t + lineCost(it, packsFor(it)), 0)
+  const total = ticked.reduce((t, it) => t + Math.round(qtyFor(it) * it.unitPrice * 100) / 100, 0)
+
+  /** Switches a row between packs and loose units, keeping roughly the same amount. */
+  const toggleLoose = (it: RestockItem) => {
+    Haptics.selectionAsync()
+    const size = it.product.packSize
+    const isLoose = !!loose[it.product.id]
+    const n = packsFor(it)
+    setPacks((p) => ({ ...p, [it.product.id]: isLoose ? Math.max(1, Math.ceil(n / size)) : n * size }))
+    setLoose((l) => ({ ...l, [it.product.id]: !isLoose }))
+  }
 
   const toggle = (id: string) => {
     Haptics.selectionAsync()
@@ -74,7 +91,7 @@ export default function RestockScreen() {
       ticked.map((it) => ({
         productId: it.product.id,
         supplierId: it.supplierId,
-        qty: packsFor(it) * it.product.packSize,
+        qty: qtyFor(it),
         unitPrice: it.unitPrice,
       })),
     )
@@ -92,6 +109,7 @@ export default function RestockScreen() {
     })
     setUnticked(new Set())
     setPacks({})
+    setLoose({})
     setOpen(null)
   }
 
@@ -130,6 +148,8 @@ export default function RestockScreen() {
                   <RestockRow
                     item={it}
                     packs={packsFor(it)}
+                    loose={!!loose[it.product.id]}
+                    onLoose={() => toggleLoose(it)}
                     checked={!unticked.has(it.product.id)}
                     open={open === it.product.id}
                     last={i === g.items.length - 1}
@@ -165,6 +185,8 @@ export default function RestockScreen() {
 function RestockRow({
   item,
   packs,
+  loose,
+  onLoose,
   checked,
   open,
   last,
@@ -173,7 +195,10 @@ function RestockRow({
   onStep,
 }: {
   item: RestockItem
+  /** Packs, or single units when `loose`. */
   packs: number
+  loose: boolean
+  onLoose: () => void
   checked: boolean
   open: boolean
   last: boolean
@@ -182,6 +207,8 @@ function RestockRow({
   onStep: (by: -1 | 1) => void
 }) {
   const p = item.product
+  const amount = loose ? `${packs} ${packs === 1 ? p.unit : p.unitPlural}` : packText(p, packs)
+  const unitWord = loose ? p.unit : 'pack'
   return (
     <View>
       <View style={styles.row}>
@@ -190,7 +217,7 @@ function RestockRow({
           onPress={onToggle}
           accessibilityRole="checkbox"
           accessibilityState={{ checked }}
-          accessibilityLabel={`${p.name}, ${packText(p, packs)}`}
+          accessibilityLabel={`${p.name}, ${amount}`}
           style={styles.toggleArea}
           hitSlop={{ top: 8, bottom: 8 }}
         >
@@ -206,26 +233,38 @@ function RestockRow({
 
         <PressableScale
           onPress={onPill}
-          accessibilityLabel={`${packText(p, packs)}. ${open ? 'Hide' : 'Change amount'}`}
+          accessibilityLabel={`${amount}. ${open ? 'Hide' : 'Change amount'}`}
           accessibilityState={{ expanded: open }}
           style={[styles.pill, open && styles.pillOpen]}
           hitSlop={8}
         >
-          <Text style={styles.pillText}>{packText(p, packs)}</Text>
+          <Text style={styles.pillText}>{amount}</Text>
         </PressableScale>
       </View>
 
       {open ? (
         <Animated.View entering={OPEN} exiting={CLOSE} style={styles.detail}>
           <Text style={styles.reason}>{item.reason}</Text>
+          {/* Only things bought in packs have a second way to count them */}
+          {p.packSize > 1 ? (
+            <PressableScale
+              onPress={onLoose}
+              accessibilityRole="button"
+              accessibilityLabel={loose ? `Count ${p.name} in packs instead` : `Count ${p.name} as loose ${p.unitPlural} instead`}
+              style={[styles.pill, loose && styles.pillOpen]}
+              hitSlop={6}
+            >
+              <Text style={styles.pillText}>{loose ? 'Loose' : 'Packs'}</Text>
+            </PressableScale>
+          ) : null}
           <View style={styles.stepper}>
-            <PressableScale onPress={() => onStep(-1)} disabled={packs <= 1} accessibilityLabel="One pack fewer" style={[styles.stepBtn, packs <= 1 && styles.stepOff]}>
+            <PressableScale onPress={() => onStep(-1)} disabled={packs <= 1} accessibilityLabel={`One ${unitWord} fewer`} style={[styles.stepBtn, packs <= 1 && styles.stepOff]}>
               <MaterialIcon name="remove" size={18} color={colors.ink} />
             </PressableScale>
             <View style={styles.stepQty}>
               <RollingNumber value={String(packs)} style={styles.stepQtyText} />
             </View>
-            <PressableScale onPress={() => onStep(1)} accessibilityLabel="One pack more" style={[styles.stepBtn, styles.stepPlus]}>
+            <PressableScale onPress={() => onStep(1)} accessibilityLabel={`One ${unitWord} more`} style={[styles.stepBtn, styles.stepPlus]}>
               <MaterialIcon name="add" size={18} color={colors.ink} />
             </PressableScale>
           </View>
