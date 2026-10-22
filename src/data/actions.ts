@@ -606,9 +606,14 @@ export function applyStarterPacks(
   )
 }
 
-/** Keeps what is already there (the demo catalogue) and stops asking. */
+/**
+ * "Explore with sample data": keeps the sample catalogue, its suppliers and
+ * prices to look around and sell from, and stops asking. The sample sales,
+ * voids and orders go: they are invented takings, and Home, Profit and Restock
+ * would show them as this shop's. The SQLite store's demoShop() does the same.
+ */
 export function skipOnboarding(s: AppState, profile?: Partial<Profile>, now = Date.now()): AppState {
-  return { ...s, profile: { ...s.profile, ...profile }, onboardedAt: now }
+  return { ...s, sales: [], voidedSales: [], purchases: [], profile: { ...s.profile, ...profile }, onboardedAt: now }
 }
 
 /** Counted quantities by product id. Anything absent is left as it was. */
