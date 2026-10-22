@@ -13,26 +13,23 @@ import {
   KOTA_BUILDS,
   PACKS,
   buildStarterCatalogue,
-  defaultKitchen,
   type ExtraItem,
-  type KitchenAnswers,
   type PackKey,
   type StarterSelection,
 } from '../../data/starterPacks'
 import AuthShell, { AuthHeading, HEADER_COMPACT } from '../Auth/AuthShell'
-import StockCountList, { type Counts } from './StockCountList'
-import KitchenQuestions from '../Menu/KitchenQuestions'
 import { colors, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 
 /**
  * What the owner answers once, after verifying their email, before the app has
  * anything in it.
  *
- * Every question does work: what the shop sells picks the starter catalogues,
- * the item list lets the owner drop what they don't sell, fix prices and add
- * their own, and the kitchen step turns "a loaf makes 4 kotas" into recipe
- * amounts. Every answer starts filled in, so the fastest path is Continue,
- * Continue — and all of it can be changed later.
+ * Two steps. What the shop sells picks the starter catalogues; "What you stock"
+ * lets the owner drop what they don't sell, fix prices, add their own and pick
+ * the kotas they make. Kotas start on the standard recipe ("How do you make
+ * them?" is in Menu), and the shelf is counted later in Count the shelf. Every
+ * answer starts filled in, so the fastest path is Continue, Set up — and all of
+ * it can be changed later.
  *
  * Skipping is always available and gives an empty shop that still sells
  * (Quick amount); Home then points to "Add what you sell".
@@ -41,7 +38,8 @@ import { colors, fonts, money, radius, space, tabular, type } from '../../theme/
 /** Two of the six are ticked up front: they are what almost every stand makes. */
 const DEFAULT_KOTAS = ['kota-special', 'kota-chips']
 
-type Step = 'packs' | 'items' | 'kotas' | 'kitchen' | 'count' | 'confirm'
+type Step = 'packs' | 'items'
+const FLOW: Step[] = ['packs', 'items']
 
 const parse = (t: string) => {
   const n = Number(t.replace(',', '.').trim())
@@ -58,7 +56,6 @@ export default function OnboardingScreen() {
   const [exclude, setExclude] = useState<string[]>([])
   const [priceText, setPriceText] = useState<Record<string, string>>({})
   const [extras, setExtras] = useState<ExtraItem[]>([])
-  const [kitchen, setKitchen] = useState<Required<KitchenAnswers>>(defaultKitchen)
   const [ownerName, setOwnerName] = useState('')
   const [shopName, setShopName] = useState('')
   /**
@@ -67,7 +64,6 @@ export default function OnboardingScreen() {
    * keystroke, taking the keyboard and the half-typed name with it.
    */
   const [askShopName, setAskShopName] = useState(false)
-  const [counts, setCounts] = useState<Counts>({})
   const [step, setStep] = useState(0)
   // Set once, on mount, so the completed event can report how long setup took
   const [startedAt] = useState(() => Date.now())
@@ -101,13 +97,7 @@ export default function OnboardingScreen() {
   }, [userId])
 
   const wantsKotas = packs.includes('kotas')
-  // The kota questions only exist if they said they make kotas
-  const flow = useMemo<Step[]>(
-    () => ['packs', 'items', ...(wantsKotas ? (['kotas', 'kitchen'] as const) : []), 'count', 'confirm'],
-    [wantsKotas],
-  )
-  // Unticking kotas on the way back can shorten the flow underneath us
-  const current = flow[Math.min(step, flow.length - 1)]
+  const current = FLOW[Math.min(step, FLOW.length - 1)]
 
   const prices = useMemo(() => {
     const out: Record<string, number> = {}
@@ -124,20 +114,8 @@ export default function OnboardingScreen() {
     exclude,
     prices,
     extras,
-    ...(wantsKotas ? { kitchen } : {}),
   }
-  const catalogue = useMemo(() => buildStarterCatalogue(selection), [packs, kotas, exclude, prices, extras, kitchen]) // eslint-disable-line react-hooks/exhaustive-deps
-  const sellable = catalogue.filter((p) => p.sellable).length
-  const ingredients = catalogue.length - sellable
-  // A kota has no count of its own (its stock comes out of its ingredients), and airtime isn't counted
-  const countable = useMemo(() => catalogue.filter((p) => !p.composite && !p.untracked), [catalogue])
-  const counted = Object.values(counts).some((n) => n > 0)
-
-  // The kitchen step asks only about what the ticked kotas use
-  const used = useMemo(
-    () => new Set(KOTA_BUILDS.filter((b) => kotas.includes(b.id)).flatMap((b) => b.recipe.map((l) => l.productId))),
-    [kotas],
-  )
+  const catalogue = useMemo(() => buildStarterCatalogue(selection), [packs, kotas, exclude, prices, extras]) // eslint-disable-line react-hooks/exhaustive-deps
 
   const togglePack = (key: PackKey) =>
     setPacks((prev) => (prev.includes(key) ? prev.filter((k) => k !== key) : [...prev, key]))
@@ -164,13 +142,12 @@ export default function OnboardingScreen() {
       packs,
       kotas,
       product_count: catalogue.length,
-      counted,
       unticked: exclude.length,
       own_items: extras.length,
       own_prices: Object.keys(prices).length,
-      chips: wantsKotas ? kitchen.chips.mode : null,
     })
-    finishOnboarding(selection, saveNames(), counts)
+    // No count here: the shelf is counted in Count the shelf, whenever the owner is ready
+    finishOnboarding(selection, saveNames())
   }
 
   function skip() {
@@ -178,38 +155,23 @@ export default function OnboardingScreen() {
     skipOnboarding(saveNames())
   }
 
-  /** Straight past the count with nothing entered; the Dashboard asks again. */
-  function countLater() {
-    setCounts({})
-    setStep((s) => s + 1)
-  }
-
-  const itemsLeft = catalogue.filter((p) => p.sellable && !p.composite).length
-  const canContinue =
-    current === 'packs'
-      ? packs.length > 0
-      : current === 'items'
-        ? itemsLeft > 0 || wantsKotas
-        : current === 'kotas'
-          ? kotas.length > 0
-          : true
 
   return (
     <AuthShell
       headerHeight={HEADER_COMPACT}
       footer={
         <View style={styles.footer}>
-          <StepDots count={flow.length} active={flow.indexOf(current)} />
-          {current === 'confirm' ? (
+          <StepDots count={FLOW.length} active={FLOW.indexOf(current)} />
+          {current === 'items' ? (
             <PrimaryButton
-              label={`Set up my shop · ${catalogue.length} products`}
+              label={catalogue.length ? `Set up my shop · ${catalogue.length} products` : 'Set up my shop'}
               onPress={finish}
               // Unticking everything on the way back can empty the selection,
               // and an empty catalogue is a shop with nothing to sell
               disabled={catalogue.length === 0}
             />
           ) : (
-            <PrimaryButton label="Continue" onPress={() => setStep((s) => s + 1)} disabled={!canContinue} />
+            <PrimaryButton label="Continue" onPress={() => setStep(1)} disabled={packs.length === 0} />
           )}
           <View style={styles.footerLinks}>
             {step > 0 ? (
@@ -219,15 +181,9 @@ export default function OnboardingScreen() {
             ) : (
               <View />
             )}
-            {current === 'count' ? (
-              <PressableScale onPress={countLater} accessibilityLabel="Count the shelf later">
-                <Text style={styles.link}>Count later</Text>
-              </PressableScale>
-            ) : (
-              <PressableScale onPress={skip} accessibilityLabel="Skip setup for now">
-                <Text style={styles.link}>Skip setup for now</Text>
-              </PressableScale>
-            )}
+            <PressableScale onPress={skip} accessibilityLabel="Skip setup for now">
+              <Text style={styles.link}>Skip setup for now</Text>
+            </PressableScale>
           </View>
         </View>
       }
@@ -283,75 +239,39 @@ export default function OnboardingScreen() {
             </View>
           ))}
           <OwnItems extras={extras} onChange={setExtras} />
+
+          {wantsKotas ? (
+            <View style={styles.itemGroup}>
+              <Text style={styles.groupTitle} accessibilityRole="header">
+                Which kotas do you make?
+              </Text>
+              <Text style={styles.kotaHint}>
+                Each one sets up its own recipe, so selling a kota takes the bread, chips and polony out of your stock by
+                itself. They start on a standard recipe; set the amounts your way later in Menu.
+              </Text>
+              <View style={styles.list}>
+                {KOTA_BUILDS.map((build) => (
+                  <KotaRow
+                    key={build.id}
+                    name={build.name}
+                    detail={build.detail}
+                    price={priceText[build.id] ?? String(build.price)}
+                    onPrice={(v) => setPrice(build.id, v)}
+                    checked={kotas.includes(build.id)}
+                    onToggle={() => toggleKota(build.id)}
+                  />
+                ))}
+              </View>
+            </View>
+          ) : null}
+
+          {catalogue.length === 0 ? (
+            <Text style={styles.kotaHint}>Tick at least one thing you sell, or skip setup for now and add things later.</Text>
+          ) : null}
         </>
       )}
 
-      {current === 'kotas' && (
-        <>
-          <AuthHeading
-            title="Which kotas do you make?"
-            subtitle="Each one sets up its own recipe, so selling a kota takes the bread, chips and polony out of your stock by itself."
-          />
-          <View style={styles.list}>
-            {KOTA_BUILDS.map((build) => (
-              <KotaRow
-                key={build.id}
-                name={build.name}
-                detail={build.detail}
-                price={priceText[build.id] ?? String(build.price)}
-                onPrice={(v) => setPrice(build.id, v)}
-                checked={kotas.includes(build.id)}
-                onToggle={() => toggleKota(build.id)}
-              />
-            ))}
-          </View>
-        </>
-      )}
 
-      {current === 'kitchen' && (
-        <>
-          <AuthHeading
-            title="How do you make them?"
-            subtitle="So the app takes the right amount off your stock. Rough numbers are fine; change any of it later in Menu."
-          />
-          <KitchenQuestions used={used} value={kitchen} onChange={setKitchen} />
-        </>
-      )}
-
-      {current === 'count' && (
-        <>
-          <AuthHeading
-            title="How much do you have now?"
-            subtitle="Count what is on the shelf. Leave anything you are not sure about — you can set it later."
-          />
-          <StockCountList products={countable} counts={counts} onChange={setCounts} />
-        </>
-      )}
-
-      {current === 'confirm' && catalogue.length === 0 && (
-        <AuthHeading
-          title="Nothing picked yet"
-          subtitle="Go back and tick at least one thing you sell, or skip setup for now and add things later."
-        />
-      )}
-
-      {current === 'confirm' && catalogue.length > 0 && (
-        <>
-          <AuthHeading
-            title="Ready to go"
-            subtitle={`${sellable} things to sell${ingredients ? ` and ${ingredients} ingredients` : ''}.`}
-          />
-          <View style={styles.summary}>
-            <SummaryLine icon="storefront" text={`${sellable} products on the till`} />
-            {ingredients > 0 && <SummaryLine icon="kitchen" text={`${ingredients} ingredients behind the kotas`} />}
-            <SummaryLine
-              icon="inventory_2"
-              text={counted ? 'Stock set from your count' : 'No stock counted yet — the Dashboard will remind you'}
-            />
-            <SummaryLine icon="payments" text="Change any price or recipe later: Profile → What you sell, or Menu." />
-          </View>
-        </>
-      )}
     </AuthShell>
   )
 }
@@ -545,15 +465,6 @@ function KotaRow({
   )
 }
 
-function SummaryLine({ icon, text }: { icon: string; text: string }) {
-  return (
-    <View style={styles.summaryLine}>
-      <MaterialIcon name={icon} size={18} color={colors.ink} />
-      <Text style={styles.summaryText}>{text}</Text>
-    </View>
-  )
-}
-
 function StepDots({ count, active }: { count: number; active: number }) {
   return (
     <View style={styles.dots} accessibilityLabel={`Step ${active + 1} of ${count}`}>
@@ -583,6 +494,7 @@ const styles = StyleSheet.create({
   cardBlurb: { ...type.badge, color: colors.muted },
   cardCount: { ...type.badge, color: colors.ink, marginTop: 'auto' },
 
+  kotaHint: { ...type.caption, color: colors.muted },
   itemGroup: { gap: space.xs },
   groupTitle: { fontFamily: fonts.bold, fontSize: 14, color: colors.quiet, marginTop: space.sm },
   itemRow: { flexDirection: 'row', alignItems: 'center', gap: space.md, minHeight: 48 },
@@ -626,9 +538,6 @@ const styles = StyleSheet.create({
   rowPrice: { ...type.moneySm, color: colors.ink },
 
 
-  summary: { gap: space.md },
-  summaryLine: { flexDirection: 'row', alignItems: 'center', gap: space.md },
-  summaryText: { ...type.caption, color: colors.ink, flex: 1 },
 
   footer: { gap: space.lg },
   footerLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
