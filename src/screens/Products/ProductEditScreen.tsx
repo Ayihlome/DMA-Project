@@ -10,7 +10,7 @@ import { useStore } from '../../store'
 import { colors, DURATION, fonts, radius, space, type } from '../../theme/tokens'
 import { pluralOf } from '../../lib/format'
 import { makePortion } from '../../data/actions'
-import { categoryFor, type SellGroup } from './productFormModel'
+import { autoName, categoryFor, drinkName, type SellGroup } from './productFormModel'
 
 const GROUPS = [
   { key: 'none', label: 'Its own tile' },
@@ -66,6 +66,14 @@ export default function ProductEditScreen() {
   )
   const [brand, setBrand] = useState(existing?.variant ?? '')
   const [size, setSize] = useState(existing?.size ?? '')
+  // The name the app last built from brand + size; the name follows them only while it still matches
+  const [lastAuto, setLastAuto] = useState(existing ? drinkName(existing.variant ?? '', existing.size ?? '') : '')
+  /** A cold drink's name, brand and size can't disagree: the name follows them until the owner types their own. */
+  const follow = (b: string, sz: string) => {
+    if (group !== 'colddrink') return
+    setName((n) => autoName(n, lastAuto, b, sz))
+    setLastAuto(drinkName(b, sz))
+  }
   const [servedAs, setServedAs] = useState(existing?.portion?.plural ?? '')
   const [perUnit, setPerUnit] = useState(existing?.portion ? String(existing.portion.perUnit) : '')
   const [error, setError] = useState<string | null>(null)
@@ -168,12 +176,23 @@ export default function ProductEditScreen() {
               <FilledInput
                 label={group === 'bread' ? 'Brand or kind — Albany, White, Brown' : 'Brand — Coke, Fanta, Sprite'}
                 value={brand}
-                onChangeText={setBrand}
+                onChangeText={(t) => {
+                  setBrand(t)
+                  follow(t, size)
+                }}
                 autoCapitalize="words"
               />
             ) : null}
             {group === 'colddrink' ? (
-              <FilledInput label="Size — can, 500ml, 2L" value={size} onChangeText={setSize} autoCapitalize="none" />
+              <FilledInput
+                label="Size — can, 500ml, 2L"
+                value={size}
+                onChangeText={(t) => {
+                  setSize(t)
+                  follow(brand, t)
+                }}
+                autoCapitalize="none"
+              />
             ) : null}
           </View>
         ) : null}

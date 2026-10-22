@@ -16,3 +16,18 @@ export function categoryFor(existing: CategoryKey | undefined, group: SellGroup)
   if (group === 'colddrink') return 'beverages'
   return existing ?? 'pantry'
 }
+
+/** A cold drink's name from its brand and size: "Coke 500ml". Empty until there is a brand. */
+export function drinkName(brand: string, size: string): string {
+  const b = brand.trim()
+  return b ? `${b} ${size.trim()}`.trim() : ''
+}
+
+/**
+ * The name after the brand or size changed. It follows them while the name is
+ * empty or still the one the app filled in (`lastAuto`), so the name, brand and
+ * size can't drift apart; a name the owner typed is never overwritten.
+ */
+export function autoName(name: string, lastAuto: string, brand: string, size: string): string {
+  return !name.trim() || name === lastAuto ? drinkName(brand, size) : name
+}
