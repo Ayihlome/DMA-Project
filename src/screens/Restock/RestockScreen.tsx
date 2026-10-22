@@ -1,5 +1,5 @@
 import React, { useCallback, useMemo, useState } from 'react'
-import { Pressable, ScrollView, StyleSheet, Text, View } from 'react-native'
+import { Pressable, ScrollView, StyleSheet, Text, TextInput, View } from 'react-native'
 import Animated, { FadeIn, FadeOut, LinearTransition } from 'react-native-reanimated'
 import { router } from 'expo-router'
 import * as Haptics from 'expo-haptics'
@@ -11,7 +11,10 @@ import PressableScale from '../../components/ui/PressableScale'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import RollingNumber from '../../components/ui/RollingNumber'
 import { useTabBarSpace } from '../../components/nav/TabBar'
-import { stockItems, stockUncounted } from '../../data/inventory'
+import { stockItems, stockUncounted, unitQty } from '../../data/inventory'
+import type { Product } from '../../data/types'
+import { useHints } from '../../lib/hints'
+import { paidPerUnit, unpricedLines } from '../StockIn/stockInModel'
 import { useStore } from '../../store'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { groupBySupplier, packText, restockDayName, restockList, type RestockItem } from './restockModel'
@@ -44,6 +47,11 @@ export default function RestockScreen() {
   const [unticked, setUnticked] = useState<Set<string>>(new Set())
   const [packs, setPacks] = useState<Record<string, number>>({})
   const [open, setOpen] = useState<string | null>(null)
+  // Prompt 3: the trip just recorded with "Bought it", until the owner answers "What did you pay?"
+  const [paidFor, setPaidFor] = useState<string[] | null>(null)
+  const hints = useHints()
+  const paidKey = paidFor ? `paid:${paidFor.join(',')}` : ''
+  const unpriced = paidFor && hints.ready && !hints.isAnswered(paidKey) ? unpricedLines(store.state, paidFor) : []
   const [toast, setToast] = useState<Toast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
 
@@ -98,6 +106,8 @@ export default function RestockScreen() {
       })),
     )
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
+    // The stock is in already; asking what was paid comes after, and is optional
+    setPaidFor(ids)
     // A mis-tap here would add a whole trip of stock, so the toast carries Undo
     setToast({
       message: `Stock updated · ${ticked.length} item${ticked.length === 1 ? '' : 's'}`,
@@ -127,6 +137,21 @@ export default function RestockScreen() {
           Shopping list
         </Text>
         <Text style={styles.subtitle}>{`Your shopping list for ${restockDayName(store.state)}`}</Text>
+
+        {unpriced.length ? (
+          <PaidPrompt
+            lines={unpriced}
+            onSave={(paid) => {
+              store.recordPaid(paidFor!, paid)
+              hints.mark(paidKey, 'done')
+              setPaidFor(null)
+            }}
+            onDismiss={() => {
+              hints.mark(paidKey, 'dismissed')
+              setPaidFor(null)
+            }}
+          />
+        ) : null}
 
         {stockItems(store.state).length === 0 ? (
           <View style={styles.emptyBlock}>
@@ -288,7 +313,83 @@ function RestockRow({
   )
 }
 
+/**
+ * Prompt 3, after "Bought it": what did the trip cost? Optional and after the
+ * fact — the stock is already in. Each total typed becomes that item's cost the
+ * way a priced delivery would; anything left empty keeps its cost. A supplier's
+ * listed price is never taken as what was paid.
+ */
+function PaidPrompt({
+  lines,
+  onSave,
+  onDismiss,
+}: {
+  lines: { product: Product; qty: number }[]
+  onSave: (paid: Record<string, number>) => void
+  onDismiss: () => void
+}) {
+  const [typed, setTyped] = useState<Record<string, string>>({})
+  const paid = Object.fromEntries(
+    lines.map((l) => [l.product.id, paidPerUnit(typed[l.product.id], l.qty)] as const).filter(([, n]) => n > 0),
+  )
+  const any = Object.keys(paid).length > 0
+
+  return (
+    <Animated.View entering={FadeIn.duration(200)} exiting={FadeOut.duration(160)} style={styles.prompt} accessibilityRole="summary">
+      <Text style={styles.promptTitle}>What did you pay?</Text>
+      <Text style={styles.promptText}>Optional. The stock is in already; a price here keeps Profit honest.</Text>
+      {lines.map((l) => (
+        <View key={l.product.id} style={styles.promptRow}>
+          <Text style={styles.promptName} numberOfLines={2}>
+            {`${l.product.name} · ${unitQty(l.product, l.qty)}`}
+          </Text>
+          <Text style={styles.promptR}>R</Text>
+          <TextInput
+            value={typed[l.product.id] ?? ''}
+            onChangeText={(t) => setTyped((m) => ({ ...m, [l.product.id]: t }))}
+            keyboardType="decimal-pad"
+            placeholder="Total"
+            placeholderTextColor={colors.quiet}
+            style={styles.promptInput}
+            accessibilityLabel={`What you paid in total for ${unitQty(l.product, l.qty)} of ${l.product.name}`}
+          />
+        </View>
+      ))}
+      <View style={styles.promptActions}>
+        <PressableScale onPress={onDismiss} accessibilityLabel="Not now, don't ask what this trip cost" hitSlop={8}>
+          <Text style={styles.promptLink}>Not now</Text>
+        </PressableScale>
+        <PressableScale onPress={() => onSave(paid)} disabled={!any} accessibilityRole="button" style={[styles.promptSave, !any && styles.promptOff]}>
+          <Text style={styles.promptSaveText}>Save prices</Text>
+        </PressableScale>
+      </View>
+    </Animated.View>
+  )
+}
+
 const styles = StyleSheet.create({
+  prompt: { gap: space.sm, padding: space.lg, marginTop: space.lg, borderRadius: radius.md, backgroundColor: colors.brandSoft },
+  promptTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
+  promptText: { ...type.caption, color: colors.ink },
+  promptRow: { flexDirection: 'row', alignItems: 'center', gap: space.sm },
+  promptName: { ...type.caption, color: colors.ink, flex: 1 },
+  promptR: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  promptInput: {
+    ...tabular,
+    fontFamily: fonts.bold,
+    fontSize: 15,
+    color: colors.ink,
+    width: 88,
+    height: 40,
+    paddingHorizontal: space.sm,
+    borderRadius: radius.sm,
+    backgroundColor: colors.surface,
+  },
+  promptActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between', marginTop: space.xs },
+  promptLink: { fontFamily: fonts.medium, fontSize: 14, color: colors.quiet, textDecorationLine: 'underline' },
+  promptSave: { height: 40, paddingHorizontal: space.lg, borderRadius: radius.md, backgroundColor: colors.brand, justifyContent: 'center' },
+  promptSaveText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  promptOff: { opacity: 0.4 },
   screen: { flex: 1, backgroundColor: colors.surface },
   scroll: { paddingHorizontal: SIDE },
   title: { fontFamily: fonts.extrabold, fontSize: 30, lineHeight: 36, letterSpacing: -0.6, color: colors.ink },

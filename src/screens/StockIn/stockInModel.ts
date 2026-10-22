@@ -49,3 +49,16 @@ export function packInput(p: Product, packSize: number, packName: string): Produ
     packName: packName.trim().toLowerCase() || undefined,
   }
 }
+
+/** Prompt 3: what came in on a "Bought it" trip with no price, for "What did you pay?". */
+export function unpricedLines(s: AppState, purchaseIds: string[]): { product: Product; qty: number }[] {
+  const qty = new Map<string, number>()
+  for (const po of s.purchases) {
+    if (!purchaseIds.includes(po.id) || po.status !== 'delivered') continue
+    for (const l of po.lines) if (!(l.unitPrice > 0)) qty.set(l.productId, (qty.get(l.productId) ?? 0) + l.qty)
+  }
+  return [...qty].flatMap(([id, n]) => {
+    const product = s.products.find((p) => p.id === id)
+    return product ? [{ product, qty: n }] : []
+  })
+}

@@ -13,6 +13,7 @@
     "photos",
     "receivePurchase",
     "receiveRestock",
+    "recordPaid",
     "recordSale",
     "removeMenuItem",
     "removePhoto",

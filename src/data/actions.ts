@@ -77,6 +77,8 @@ export type StoreApi = {
   receiveRestock: (lines: OrderInput) => string[]
   /** Takes a recorded trip back out. */
   undoRestock: (purchaseIds: string[]) => void
+  /** "What did you pay?" after "Bought it": per-unit prices the owner typed, by product id. */
+  recordPaid: (purchaseIds: string[], paid: Record<string, number>) => void
   /** The day the owner goes shopping, 0 = Sunday … 6 = Saturday. */
   setRestockDay: (day: number) => void
   /** Takes a recorded sale back and returns its stock. */
@@ -415,6 +417,60 @@ export function undoRestock(s: AppState, purchaseIds: string[]): AppState {
       purchases: s.purchases.filter((p) => !purchaseIds.includes(p.id)),
     },
     'stock',
+    'update',
+  )
+}
+
+/**
+ * "What did you pay?", answered after "Bought it" (prompt 3). The stock is
+ * already in, recorded with no price; this puts the price the owner typed on
+ * those lines and updates each item's cost as if it had come in at that price
+ * (the rest of the shelf at the old cost, this trip at the new one). Only typed
+ * prices count: an item left empty keeps its cost, a line that already has a
+ * price is not overwritten, and supplier prices are never touched. The cost
+ * from before is kept on the line, so Undo still puts it back. Returns the same
+ * state when nothing was typed.
+ */
+export function recordPaid(s: AppState, purchaseIds: string[], paid: Record<string, number>): AppState {
+  const priced = (l: PurchaseLine) => !(l.unitPrice > 0) && (paid[l.productId] ?? 0) > 0
+  const trip = s.purchases.filter((p) => purchaseIds.includes(p.id) && p.status === 'delivered')
+  const bought = new Map<string, number>()
+  for (const po of trip) for (const l of po.lines) if (priced(l)) bought.set(l.productId, (bought.get(l.productId) ?? 0) + l.qty)
+  if (!bought.size) return s
+
+  const costBefore = new Map<string, number>()
+  const products = recosted(
+    s.products.map((p) => {
+      const qty = bought.get(p.id)
+      if (!qty || p.composite) return p
+      const cost = averageCost(p.stock - qty, p.cost, qty, paid[p.id])
+      if (cost === p.cost) return p
+      costBefore.set(p.id, p.cost)
+      return { ...p, cost }
+    }),
+  )
+  return queued(
+    {
+      ...s,
+      products,
+      purchases: s.purchases.map((po) =>
+        trip.includes(po)
+          ? {
+              ...po,
+              lines: po.lines.map((l) =>
+                priced(l)
+                  ? {
+                      ...l,
+                      unitPrice: paid[l.productId],
+                      ...(l.costBefore === undefined && costBefore.has(l.productId) ? { costBefore: costBefore.get(l.productId) } : {}),
+                    }
+                  : l,
+              ),
+            }
+          : po,
+      ),
+    },
+    'purchase',
     'update',
   )
 }

@@ -204,7 +204,7 @@ export function SqliteStoreProvider({
     const api: Pick<
       A.StoreApi,
       | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'setPortion' | 'applyKitchen' | 'createOrderList'
-      | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'voidSale' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
+      | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'recordPaid' | 'setRestockDay' | 'voidSale' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
       | 'setBudget' | 'updateProfile' | 'finishOnboarding' | 'skipOnboarding' | 'setStockCounts' | 'resetDemoData'
     > = {
       recordSale: (lines, meta) => {
@@ -306,6 +306,15 @@ export function SqliteStoreProvider({
         if (next === cur()) return
         const gone = cur().purchases.filter((p) => ids.includes(p.id)).map((p) => p.id)
         saveOrder(next, 'undoPurchaseOrders', () => useCases.undoPurchaseOrders({ ids: gone }))
+      },
+      // The new costs go into product meta. The purchase lines' prices are only on screen: no use case
+      // updates a received order's lines, so after the next reload they read 0 again (nothing shows them)
+      recordPaid: (ids, paid) => {
+        const prev = cur()
+        const next = A.recordPaid(prev, ids, paid)
+        if (next === prev) return
+        commit(next)
+        enqueue(() => persistCosts(useCases, prev, next))
       },
       setRestockDay: (day) => {
         const next = A.setRestockDay(cur(), day)

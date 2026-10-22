@@ -201,6 +201,7 @@ export function StoreProvider({
           return created.map((po) => po.id)
         },
         undoRestock: (ids) => update((s) => A.undoRestock(s, ids)),
+        recordPaid: (ids, paid) => update((s) => A.recordPaid(s, ids, paid)),
         setRestockDay: (day) => update((s) => A.setRestockDay(s, day)),
         voidSale: (saleId) => update((s) => A.voidSale(s, saleId)),
         cancelPurchase: (id) => update((s) => A.cancelPurchase(s, id)),
