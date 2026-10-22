@@ -1,10 +1,10 @@
-import React, { useState } from 'react'
+import React, { useRef, useState } from 'react'
 import { StyleSheet, Text, TextInput, View } from 'react-native'
 import MaterialIcon from '../../components/common/MaterialIcon'
 import PressableScale from '../../components/ui/PressableScale'
 import type { Product } from '../../data/types'
 import { confirmCount, stepFrom } from './countModel'
-import { colors, radius, space, tabular, TAP, type } from '../../theme/tokens'
+import { colors, fonts, radius, space, tabular, TAP, type } from '../../theme/tokens'
 
 /** Counted quantity by product id. A product that isn't in it hasn't been counted. */
 export type Counts = Record<string, number>
@@ -68,6 +68,7 @@ function CountRow({
   // The field keeps its own text so a half-typed "1," survives the keystroke
   // that would otherwise round it away. Empty while the row is not counted.
   const [text, setText] = useState(counted === undefined ? '' : show(counted))
+  const field = useRef<TextInput>(null)
   // What − and + start from, and what the greyed field shows before a count
   const shown = counted ?? Math.max(0, product.stock)
 
@@ -88,6 +89,7 @@ function CountRow({
           {product.name}
         </Text>
         <Text style={styles.meta} numberOfLines={1}>
+          {counted !== undefined ? 'Counted · ' : ''}
           {product.unitPlural}
           {hasPack ? ` · ${product.packLabel}` : ''}
         </Text>
@@ -117,8 +119,18 @@ function CountRow({
           onFocus={() => {
             if (counted !== undefined) return
             const n = confirmCount(product.stock)
-            setText(show(n))
+            const t = show(n)
+            setText(t)
             onChange(n)
+            // The text changed after focus, so select it again once it is on screen: typing then replaces it
+            requestAnimationFrame(() => {
+              const input = field.current as unknown as {
+                setSelection?: (start: number, end: number) => void
+                setSelectionRange?: (start: number, end: number) => void
+              } | null
+              if (input?.setSelection) input.setSelection(0, t.length)
+              else input?.setSelectionRange?.(0, t.length)
+            })
           }}
           onBlur={() => setText(counted === undefined ? '' : show(counted))}
           placeholder={show(shown)}
@@ -127,7 +139,9 @@ function CountRow({
           inputMode="decimal"
           selectTextOnFocus
           accessibilityLabel={`How many ${product.unitPlural} of ${product.name}${counted === undefined ? ', not counted yet' : ''}`}
-          style={styles.field}
+          ref={field}
+          // A counted row reads differently from the greyed guess, so a confirmed 0 is plainly a count
+          style={[styles.field, counted !== undefined && styles.fieldCounted]}
         />
 
         <PressableScale
@@ -191,6 +205,8 @@ export const styles = StyleSheet.create({
     borderRadius: radius.sm,
     backgroundColor: colors.field,
   },
+
+  fieldCounted: { backgroundColor: colors.brandSoft, fontFamily: fonts.bold },
 
   pack: {
     paddingHorizontal: space.md,
