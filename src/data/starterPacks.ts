@@ -350,8 +350,11 @@ function factorFor(q: KitchenQuestion, answer: number | undefined) {
 
 const round4 = (n: number) => Math.round(n * 10000) / 10000
 
-/** One build's recipe as this kitchen makes it. Potato chips swap the frozen chips for potatoes. */
-function kitchenRecipe(recipe: RecipeLine[], k: KitchenAnswers | undefined): RecipeLine[] {
+/**
+ * One build's recipe as this kitchen makes it, with starter ids ("bread",
+ * "fries", "potato"). Potato chips swap the frozen chips for potatoes.
+ */
+export function kitchenRecipe(recipe: RecipeLine[], k: KitchenAnswers | undefined): RecipeLine[] {
   if (!k) return recipe
   return recipe.map((l) => {
     if (l.productId === 'fries' && k.chips) {
@@ -549,6 +552,69 @@ type ProductInputLike = {
   family?: 'bread' | 'colddrink' | null
   variant?: string
   size?: string
+}
+
+/**
+ * A kota ingredient as a new product, by its starter id: what the kitchen
+ * questions add when a recipe now needs it (potatoes, once the owner says they
+ * cut their own). Undefined for an id that isn't a kota ingredient.
+ */
+export function kitchenIngredient(templateId: string, chips?: ChipsAnswer): Product | undefined {
+  if (templateId === 'potato') return chips?.mode === 'potato' ? toProduct(potatoTemplate(chips)) : undefined
+  const t = KOTA_INGREDIENTS.find((x) => x.id === templateId)
+  return t ? toProduct(t) : undefined
+}
+
+/** A starter kota still on the app's standard recipe: the only kind the kitchen questions rebuild. */
+export const isStandardKota = (p: Product) =>
+  !!p.composite && p.recipeChecked === false && KOTA_BUILDS.some((b) => b.id === p.template)
+
+const round1 = (n: number) => Math.round(n * 10) / 10
+
+/**
+ * The kitchen answers the standard kota recipes were built with, read back from
+ * them, so reopening "How do you make them?" shows what the owner said rather
+ * than the defaults. Anything it can't read falls back to the default answer.
+ */
+export function kitchenFrom(products: Product[]): Required<KitchenAnswers> {
+  const out = defaultKitchen()
+  const byId = new Map(products.map((p) => [p.id, p]))
+  const standard = products.filter(isStandardKota)
+  // A kota's line for an ingredient, found by its starter id, next to the build's own line
+  const pairs = (templateIds: string[]) =>
+    standard.flatMap((k) => {
+      const build = KOTA_BUILDS.find((b) => b.id === k.template)!
+      return (k.recipe ?? []).flatMap((line) => {
+        const ingredient = byId.get(line.productId)
+        if (!ingredient?.template || !templateIds.includes(ingredient.template)) return []
+        const buildLine = build.recipe.find((l) => l.productId === (ingredient.template === 'potato' ? 'fries' : ingredient.template))
+        return buildLine ? [{ line, buildLine, ingredient }] : []
+      })
+    })
+
+  for (const q of KITCHEN_QUESTIONS) {
+    const found = pairs([q.id])[0]
+    if (!found) continue
+    const factor = found.line.qty / found.buildLine.qty
+    out.answers[q.id] = round1(q.kind === 'makes' ? q.base / (q.standard * factor) : q.standard * factor)
+  }
+
+  const chips = pairs(['fries', 'potato'])[0]
+  if (chips) {
+    const share = chips.buildLine.qty / CHIPS_STANDARD
+    if (chips.ingredient.template === 'potato' && chips.ingredient.portion) {
+      const perPotato = chips.ingredient.portion.perUnit
+      out.chips = {
+        mode: 'potato',
+        chipsPerPotato: perPotato,
+        chipsPerKota: round1((chips.line.qty * perPotato) / share),
+        potatoesPerBag: chips.ingredient.packSize,
+      }
+    } else if (chips.ingredient.template === 'fries') {
+      out.chips = { mode: 'bag', kotasPerBag: Math.round(CHIPS_BAG_KG / (chips.line.qty / share)) }
+    }
+  }
+  return out
 }
 
 /** How many products a selection will create, for the label on the last step. */

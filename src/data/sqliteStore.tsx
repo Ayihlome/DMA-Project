@@ -203,7 +203,7 @@ export function SqliteStoreProvider({
 
     const api: Pick<
       A.StoreApi,
-      | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'setPortion' | 'createOrderList'
+      | 'recordSale' | 'updateSellGrid' | 'saveMenuItem' | 'removeMenuItem' | 'addIngredient' | 'setPortion' | 'applyKitchen' | 'createOrderList'
       | 'receivePurchase' | 'receiveRestock' | 'undoRestock' | 'setRestockDay' | 'voidSale' | 'cancelPurchase' | 'addProduct' | 'updateProduct' | 'upsertSupplierPrice' | 'setPreferredSupplier'
       | 'setBudget' | 'updateProfile' | 'finishOnboarding' | 'skipOnboarding' | 'setStockCounts' | 'resetDemoData'
     > = {
@@ -254,6 +254,8 @@ export function SqliteStoreProvider({
       },
       // The portion is in the product's meta and the rescaled recipes are recipe rows; persistChange writes both
       setPortion: (productId, portion) => change((s) => A.setPortion(s, productId, portion)),
+      // A new ingredient (potatoes) needs a uuid here; persistChange writes it, the rebuilt recipes and any new portion
+      applyKitchen: (kitchen) => change((s) => A.applyKitchen(s, kitchen, () => newId())),
       setStockCounts: (counts) => {
         const at = Date.now()
         const next = A.setStockCounts(cur(), counts, at)

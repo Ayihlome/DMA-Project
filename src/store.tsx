@@ -213,6 +213,7 @@ export function StoreProvider({
         setStockCounts: (counts) => update((s) => A.setStockCounts(s, counts)),
         updateSellGrid: (patch) => update((s) => A.updateSellGrid(s, patch)),
         setPortion: (productId, portion) => update((s) => A.setPortion(s, productId, portion)),
+        applyKitchen: (kitchen) => update((s) => A.applyKitchen(s, kitchen)),
         // Same pattern as addProduct: build once (so the caller gets the exact
         // product back), then commit with a functional update so two calls in
         // one tap can't overwrite each other

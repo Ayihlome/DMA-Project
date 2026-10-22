@@ -10,6 +10,8 @@ import { colors, fonts, money, space, type } from '../../theme/tokens'
 import { marginOf } from '../Profit/profitModel'
 import MenuItemSheet, { type MenuEdit } from './MenuItemSheet'
 import { recipeStatusLabel } from './menuModel'
+import KitchenSheet from './KitchenSheet'
+import { isStandardKota } from '../../data/starterPacks'
 
 const SIDE = 28
 /** Made-to-order items saved before groups existed, or without one. */
@@ -34,6 +36,9 @@ export default function MenuScreen() {
   const insets = useSafeAreaInsets()
   const { state } = useStore()
   const [edit, setEdit] = useState<MenuEdit | null>(null)
+  const [kitchenOpen, setKitchenOpen] = useState(false)
+  // The kitchen questions only change kotas still on the standard recipe
+  const hasStandard = useMemo(() => state.products.some(isStandardKota), [state.products])
   const [toast, setToast] = useState<Toast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
 
@@ -53,6 +58,17 @@ export default function MenuScreen() {
     <View style={styles.screen}>
       <ScrollView contentContainerStyle={[styles.scroll, { paddingBottom: insets.bottom + 120 }]} showsVerticalScrollIndicator={false}>
         <Text style={styles.lead}>Food you make. Every sale takes its ingredients off stock.</Text>
+
+        {hasStandard ? (
+          <View style={styles.group}>
+            <ListRow
+              title="How do you make them?"
+              detail="A loaf makes how many kotas, chips from bags or potatoes: set it once for the standard recipes"
+              onPress={() => setKitchenOpen(true)}
+              last
+            />
+          </View>
+        ) : null}
 
         {groups.length === 0 ? (
           <Text style={styles.empty}>No food yet. Add the first thing you make — a kota, a burger, a plate.</Text>
@@ -81,6 +97,12 @@ export default function MenuScreen() {
       </View>
 
       <ActionToast toast={toast} bottom={insets.bottom + 100} onDone={clearToast} />
+
+      <KitchenSheet
+        visible={kitchenOpen}
+        onClose={() => setKitchenOpen(false)}
+        onSaved={() => setToast({ message: 'Standard recipes resized' })}
+      />
 
       <MenuItemSheet
         edit={edit}

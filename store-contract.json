@@ -2,6 +2,7 @@
   "StoreApi": [
     "addIngredient",
     "addProduct",
+    "applyKitchen",
     "backUpNow",
     "backupStatus",
     "cancelPurchase",

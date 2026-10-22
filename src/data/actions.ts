@@ -7,7 +7,7 @@ import type { AppState, CategoryKey, Family, PaymentMethod, Portion, Product, Pr
 import { QUICK_AMOUNT_ID } from './types'
 import { deductionsFor, productById, recipeCost, stockItems } from './inventory'
 import { createSeedState } from './seed'
-import { buildStarterCatalogue, type StarterSelection } from './starterPacks'
+import { buildStarterCatalogue, isStandardKota, kitchenIngredient, kitchenRecipe, KOTA_BUILDS, type KitchenAnswers, type StarterSelection } from './starterPacks'
 import type { BackupStatus } from '../lib/cloudBackup'
 
 export type Result = { ok: true; message: string } | { ok: false; message: string }
@@ -69,6 +69,8 @@ export type StoreApi = {
   addIngredient: (input: IngredientInput) => Product
   /** How the kitchen measures an ingredient ("1 potato = 5 chips"); null clears it. */
   setPortion: (productId: string, portion: Portion | null) => void
+  /** "How do you make them?" from Menu: rebuilds the kotas still on the standard recipe. */
+  applyKitchen: (kitchen: KitchenAnswers) => void
   createOrderList: (lines: OrderInput) => Purchase[]
   receivePurchase: (id: string) => void
   /** Records a shopping trip as delivered purchases and adds the stock. Returns the purchase ids, for Undo. */
@@ -757,6 +759,62 @@ export function buildMenuItem(s: AppState, input: MenuItemInput, id?: string): P
     composite: true,
     ...fields,
   }
+}
+
+/**
+ * "How do you make them?", answered from Menu: rebuilds every kota still on the
+ * app's standard recipe from the owner's answers. A recipe the owner saved, or
+ * one with no status, is left alone, and the rebuilt ones stay "not checked":
+ * the owner sized the ingredients but hasn't looked at each recipe.
+ *
+ * An ingredient the new recipes need and the shop doesn't have yet (potatoes,
+ * once the owner cuts their own) is added, at an unknown cost. `newId` names
+ * it: the SQLite store needs a uuid. Returns the same state when there is
+ * nothing to rebuild.
+ */
+export function applyKitchen(s: AppState, kitchen: KitchenAnswers, newId: (templateId: string) => string = (t) => t): AppState {
+  if (!s.products.some(isStandardKota)) return s
+  let next = s
+  const idOf = new Map<string, string>()
+  for (const p of s.products) if (p.template && !p.composite && !idOf.has(p.template)) idOf.set(p.template, p.id)
+
+  // Potatoes the shop already has: a new "chips per potato" is a new portion
+  const chips = kitchen.chips
+  const potatoId = idOf.get('potato')
+  if (chips?.mode === 'potato' && potatoId) {
+    const potato = productById(next, potatoId)!
+    if (potato.portion?.perUnit !== chips.chipsPerPotato) {
+      next = setPortion(next, potatoId, { name: 'chip', plural: 'chips', perUnit: Math.max(1, chips.chipsPerPotato) })
+    }
+    const perBag = Math.max(1, Math.round(chips.potatoesPerBag))
+    if (potato.packSize !== perBag) {
+      next = { ...next, products: next.products.map((p) => (p.id === potatoId ? { ...p, packSize: perBag, packLabel: `bag of ${perBag}` } : p)) }
+    }
+  }
+
+  const added: Product[] = []
+  const ensure = (templateId: string) => {
+    const have = idOf.get(templateId)
+    if (have) return have
+    const made = kitchenIngredient(templateId, chips)
+    if (!made) return undefined
+    let id = newId(templateId)
+    while (next.products.some((p) => p.id === id) || added.some((p) => p.id === id)) id = `${templateId}-${uid()}`
+    added.push({ ...made, id })
+    idOf.set(templateId, id)
+    return id
+  }
+
+  const products = next.products.map((p) => {
+    if (!isStandardKota(p)) return p
+    const build = KOTA_BUILDS.find((b) => b.id === p.template)!
+    const recipe = kitchenRecipe(build.recipe, kitchen).flatMap((l) => {
+      const id = ensure(l.productId)
+      return id ? [{ productId: id, qty: l.qty }] : []
+    })
+    return { ...p, recipe }
+  })
+  return queued({ ...next, products: recosted([...products, ...added]) }, 'product', 'update')
 }
 
 /** Puts a built product into the catalogue, replacing it if it's already there. */
