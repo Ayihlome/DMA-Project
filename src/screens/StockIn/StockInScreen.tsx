@@ -15,7 +15,8 @@ import { stockItems, unitQty } from '../../data/inventory'
 import type { Product } from '../../data/types'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { packText } from '../Restock/restockModel'
-import { paidPerUnit } from './stockInModel'
+import { needsPackSize, packInput, paidPerUnit } from './stockInModel'
+import { useHints } from '../../lib/hints'
 
 const SIDE = 28
 const OPEN = FadeIn.duration(200)
@@ -51,6 +52,8 @@ export default function StockInScreen() {
   const [paid, setPaid] = useState<Record<string, string>>({})
   const [toast, setToast] = useState<Toast | null>(null)
   const clearToast = useCallback(() => setToast(null), [])
+  // Prompt 1: "How do you buy it?", once per item, remembered for this owner
+  const hints = useHints()
 
   const suppliers = useMemo(() => [...store.state.suppliers].sort((a, b) => a.name.localeCompare(b.name)), [store.state.suppliers])
   const supplier = suppliers.find((s) => s.id === supplierId)
@@ -211,6 +214,20 @@ export default function StockInScreen() {
                 </Animated.View>
               ) : null}
 
+              {n > 0 && hints.ready && needsPackSize(store.state, p, hints.hints) ? (
+                <PackPrompt
+                  product={p}
+                  onSingles={() => hints.mark(`pack:${p.id}`, 'done')}
+                  onPack={(size, name) => {
+                    store.updateProduct(p.id, packInput(p, size, name))
+                    // What was already counted on this row was singles; keep it that way
+                    setLoose((m) => ({ ...m, [p.id]: true }))
+                    hints.mark(`pack:${p.id}`, 'done')
+                  }}
+                  onDismiss={() => hints.mark(`pack:${p.id}`, 'dismissed')}
+                />
+              ) : null}
+
               {i === items.length - 1 ? null : <View style={styles.divider} />}
             </Animated.View>
           )
@@ -232,7 +249,84 @@ export default function StockInScreen() {
   )
 }
 
+const PACK_KINDS = ['Singles', 'Crate', 'Tray', 'Box'] as const
+
+/**
+ * Prompt 1, on the first receipt of an item whose pack nobody has named: how is
+ * it bought? Singles leaves it as it is; a crate, tray or box asks how many are
+ * in one and saves that as the item's pack. "Not now" never asks again.
+ */
+function PackPrompt({
+  product,
+  onSingles,
+  onPack,
+  onDismiss,
+}: {
+  product: Product
+  onSingles: () => void
+  onPack: (size: number, name: string) => void
+  onDismiss: () => void
+}) {
+  const [kind, setKind] = useState<(typeof PACK_KINDS)[number]>('Singles')
+  const [count, setCount] = useState('')
+  const size = Math.round(parse(count))
+  const canSave = kind === 'Singles' || size > 1
+
+  return (
+    <Animated.View entering={OPEN} exiting={CLOSE} style={styles.prompt} accessibilityRole="summary">
+      <Text style={styles.promptTitle}>{`How do you buy ${product.name}?`}</Text>
+      <View style={styles.promptKinds}>
+        {PACK_KINDS.map((k) => {
+          const on = k === kind
+          return (
+            <PressableScale
+              key={k}
+              onPress={() => {
+                Haptics.selectionAsync()
+                setKind(k)
+              }}
+              accessibilityRole="button"
+              accessibilityState={{ selected: on }}
+              style={[styles.chip, on && styles.chipOn]}
+              hitSlop={4}
+            >
+              <Text style={styles.chipText}>{k}</Text>
+            </PressableScale>
+          )
+        })}
+      </View>
+      {kind === 'Singles' ? null : (
+        <FilledInput
+          label={`How many ${product.unitPlural} in one ${kind.toLowerCase()}?`}
+          value={count}
+          onChangeText={setCount}
+          keyboardType="number-pad"
+        />
+      )}
+      <View style={styles.promptActions}>
+        <PressableScale onPress={onDismiss} accessibilityLabel={`Not now, don't ask how ${product.name} is bought`} hitSlop={8}>
+          <Text style={styles.promptLink}>Not now</Text>
+        </PressableScale>
+        <PressableScale
+          onPress={() => (kind === 'Singles' ? onSingles() : onPack(size, kind))}
+          disabled={!canSave}
+          accessibilityRole="button"
+          style={[styles.chip, styles.chipOn, !canSave && styles.promptOff]}
+        >
+          <Text style={styles.chipText}>Save</Text>
+        </PressableScale>
+      </View>
+    </Animated.View>
+  )
+}
+
 const styles = StyleSheet.create({
+  prompt: { gap: space.sm, padding: space.lg, marginBottom: space.md, borderRadius: radius.md, backgroundColor: colors.brandSoft },
+  promptTitle: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
+  promptKinds: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
+  promptActions: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
+  promptLink: { fontFamily: fonts.medium, fontSize: 14, color: colors.quiet, textDecorationLine: 'underline' },
+  promptOff: { opacity: 0.4 },
   screen: { flex: 1, backgroundColor: colors.surface },
   scroll: { paddingHorizontal: SIDE, paddingTop: space.lg },
   sectionTitle: { ...type.bodyStrong, color: colors.ink, marginBottom: space.sm },
