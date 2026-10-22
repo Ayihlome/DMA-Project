@@ -161,7 +161,7 @@ export default function CountStockScreen() {
             ))}
             {unrecipied.map((p) => (
               <Text key={p.id} style={styles.noticeLine}>
-                {`${p.name}: sold ${p.soldWithoutRecipe} without a recipe, so its ingredients weren't taken off stock. Count them below.`}
+                {`${p.name}: sold ${p.soldWithoutRecipe} without a recipe, so its ingredients weren't taken off stock. Count them below, and add its ingredients in Menu.`}
               </Text>
             ))}
           </View>

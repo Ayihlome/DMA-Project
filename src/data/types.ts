@@ -64,7 +64,7 @@ export type Product = {
   /**
    * How many times this composite has been sold while it had no recipe. Those
    * sales deducted no ingredients, so its ingredient stock is off by that much.
-   * Shown to the owner in Count stock; cleared when the owner saves a count.
+   * Shown to the owner in Count stock; cleared when the item is saved with a recipe.
    */
   soldWithoutRecipe?: number
 }

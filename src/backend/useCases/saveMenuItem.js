@@ -94,6 +94,11 @@ export async function saveMenuItem({
              meta = ?, is_deleted = 0, updated_at = ? where id = ?`,
           [name.trim(), price, JSON.stringify(meta), now, productId],
         );
+        // Having a recipe is what the "sold without a recipe" flag was asking for (phone-only column,
+        // so nothing to sync). Same rule as buildMenuItem in src/data/actions.ts.
+        if (lines.length) {
+          await tx.execute(`update products set sold_without_recipe = 0 where id = ?`, [productId]);
+        }
         await enqueueSync("products", productId, "update", {
           name: name.trim(),
           selling_price: price,

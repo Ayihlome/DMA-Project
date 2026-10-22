@@ -11,9 +11,10 @@ import { parseMeta } from "./productSql";
  * Made-to-order (composite) products are skipped, their stock comes from their ingredients.
  * A count never goes below 0. Products not in `counts` are left alone.
  *
- * Only a full count (every product with a shelf count) clears the "sold without a recipe"
- * flags and saves the time of the count, which the next count checks the recipes against
- * (see src/data/recipeCheck.ts). Same rule as setStockCounts in src/data/actions.ts.
+ * Only a full count (every product with a shelf count) saves the time of the count, which the
+ * next count checks the recipes against (see src/data/recipeCheck.ts). "Sold without a recipe"
+ * flags are not touched here; saveMenuItem clears one when that item gets a recipe.
+ * Same rule as setStockCounts in src/data/actions.ts.
  */
 export function createSetStockCountsUseCase({
   productRepository,
@@ -70,15 +71,7 @@ export function createSetStockCountsUseCase({
           const n = counts[p.id];
           return n !== null && n !== "" && Number.isFinite(Number(n));
         });
-      if (!full) return { success: true, updated, skipped };
-
-      for (const product of products) {
-        if (product.sold_without_recipe > 0) {
-          await productRepository.setSoldWithoutRecipe(product.id, 0);
-        }
-      }
-
-      if (deviceSettingsRepository) {
+      if (full && deviceSettingsRepository) {
         await deviceSettingsRepository.setJSON(
           SETTINGS_KEYS.lastCountAt,
           Number.isFinite(input.at) ? input.at : Date.now(),

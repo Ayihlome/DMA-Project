@@ -3,7 +3,7 @@
  * app's number, including a negative one, which is what flags it for a recount.
  */
 import { describe, expect, it } from 'vitest'
-import { isFullCount, recordSale, setStockCounts } from '../src/data/actions'
+import { buildMenuItem, isFullCount, recordSale, setStockCounts } from '../src/data/actions'
 import type { AppState, Product } from '../src/data/types'
 import { stepFrom } from '../src/screens/Onboarding/countModel'
 
@@ -86,11 +86,25 @@ describe('a full count', () => {
     expect(isFullCount(s, { milk: 6, sugar: 1 })).toBe(true)
   })
 
-  it('clears the flags and moves the count date, as before', () => {
+  it('moves the count date but keeps the "sold without a recipe" flags', () => {
     const s = setStockCounts(shopWithFlags(), { milk: 6, sugar: 1 }, NOW + 1000)
     expect(byId(s, 'sugar').stock).toBe(1)
-    expect(byId(s, 'kota').soldWithoutRecipe).toBe(0)
+    expect(byId(s, 'kota').soldWithoutRecipe).toBe(1)
     expect(s.lastCountAt).toBe(NOW + 1000)
+  })
+})
+
+describe('the "sold without a recipe" flag', () => {
+  it('clears when a recipe is saved on that item', () => {
+    const s = shopWithFlags()
+    const kota = buildMenuItem(s, { name: 'kota', price: 30, menu: 'Kota', recipe: [{ productId: 'milk', qty: 1 }] }, 'kota')
+    expect(kota.soldWithoutRecipe).toBe(0)
+  })
+
+  it('stays when the item is saved still without a recipe', () => {
+    const s = shopWithFlags()
+    const kota = buildMenuItem(s, { name: 'Kota', price: 35, menu: 'Kota', recipe: [] }, 'kota')
+    expect(kota.soldWithoutRecipe).toBe(1)
   })
 })
 

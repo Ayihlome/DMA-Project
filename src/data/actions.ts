@@ -640,20 +640,16 @@ export const isFullCount = (s: AppState, counts: StockCounts) =>
  * counted items and nothing else: an item the owner didn't count keeps the
  * app's number, a negative one included.
  *
- * Only a full count clears every "sold without a recipe" flag: those sales threw
- * the ingredient numbers off, and a kota with no recipe has no known
- * ingredients to match against, so only the whole shelf can be the reset point.
- * The count date moves only then too, because recipe suggestions compare every
- * ingredient against what was sold since that date.
+ * "Sold without a recipe" flags are left alone: they clear when that item gets
+ * a recipe (buildMenuItem). The count date moves only on a full count, because
+ * recipe suggestions compare every ingredient against what was sold since then.
  */
 export function setStockCounts(s: AppState, counts: StockCounts, now = Date.now()): AppState {
-  const full = isFullCount(s, counts)
-  const products = withCounts(s.products, counts)
   return queued(
     {
       ...s,
-      products: full ? products.map((p) => (p.soldWithoutRecipe ? { ...p, soldWithoutRecipe: 0 } : p)) : products,
-      ...(full ? { lastCountAt: now } : {}),
+      products: withCounts(s.products, counts),
+      ...(isFullCount(s, counts) ? { lastCountAt: now } : {}),
     },
     'stock',
     'update',
@@ -724,6 +720,8 @@ export function buildMenuItem(s: AppState, input: MenuItemInput, id?: string): P
     menu: input.menu.trim() || 'Menu',
     recipe,
     cost: recipeCost(recipe, (id) => productById(s, id)?.cost),
+    // Having a recipe is what the "sold without a recipe" flag was asking for
+    ...(recipe.length ? { soldWithoutRecipe: 0 } : {}),
   }
   const existing = id ? productById(s, id) : undefined
   if (existing) return { ...existing, ...fields }
