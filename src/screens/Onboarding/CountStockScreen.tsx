@@ -51,10 +51,10 @@ export default function CountStockScreen() {
     [state.products],
   )
 
-  // A negative count can't be real; start those from 0 so the owner types the truth
-  const [counts, setCounts] = useState<Counts>(() =>
-    Object.fromEntries(countable.map((p) => [p.id, Math.max(0, p.stock)])),
-  )
+  // Nothing is counted until the owner touches a row: an item they didn't look at
+  // keeps the app's number (a negative one stays flagged) instead of being saved as counted
+  const [counts, setCounts] = useState<Counts>({})
+  const countedRows = Object.keys(counts).length
 
   // After saving: ingredients that ran lower than the recipes explain, and what the owner said about each
   const [review, setReview] = useState<RecipeSuggestion[] | null>(null)
@@ -170,7 +170,11 @@ export default function CountStockScreen() {
       </ScrollView>
 
       <View style={[styles.bar, { paddingBottom: insets.bottom + space.lg }]}>
-        <PrimaryButton label="Save the count" onPress={save} />
+        <PrimaryButton
+          label={countedRows ? `Save the count · ${countedRows} item${countedRows === 1 ? '' : 's'}` : 'Save the count'}
+          onPress={save}
+          disabled={countedRows === 0}
+        />
       </View>
     </View>
   )

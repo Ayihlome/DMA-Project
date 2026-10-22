@@ -165,7 +165,8 @@ describe('sales before the first count', () => {
 
     const counted = setStockCounts(s, { bread: 10 }, NOW + 2000)
     expect(byId(counted, 'bread').stock).toBe(10)
-    expect(counted.lastCountAt).toBe(NOW + 2000)
+    // Only the bread was counted, so the shop-wide count date stays where it was
+    expect(counted.lastCountAt).toBe(s.lastCountAt)
     // Sales history is untouched
     expect(counted.sales).toEqual(s.sales)
 

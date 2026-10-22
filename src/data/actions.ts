@@ -5,7 +5,7 @@
  */
 import type { AppState, CategoryKey, Family, PaymentMethod, Portion, Product, Profile, Purchase, PurchaseLine, RecipeLine, SaleLine, SellGridSettings, SyncOp } from './types'
 import { QUICK_AMOUNT_ID } from './types'
-import { deductionsFor, productById, recipeCost } from './inventory'
+import { deductionsFor, productById, recipeCost, stockItems } from './inventory'
 import { buildStarterCatalogue, type StarterSelection } from './starterPacks'
 import type { BackupStatus } from '../lib/cloudBackup'
 
@@ -626,25 +626,35 @@ function withCounts(products: Product[], counts: StockCounts): Product[] {
   })
 }
 
+/** Every item with a shelf count was counted (kotas and airtime have none). */
+export const isFullCount = (s: AppState, counts: StockCounts) =>
+  stockItems(s).every((p) => counts[p.id] !== undefined && Number.isFinite(counts[p.id]))
+
 /**
- * A stock count done outside onboarding, from the count screen.
+ * A stock count done outside onboarding, from the count screen. It sets the
+ * counted items and nothing else: an item the owner didn't count keeps the
+ * app's number, a negative one included.
  *
- * Also clears every "sold without a recipe" flag: those sales threw the
- * ingredient numbers off, and a count is what puts them right. A kota with no
- * recipe has no known ingredients to match against, so the whole count is the
- * reset point rather than any particular item in it.
+ * Only a full count clears every "sold without a recipe" flag: those sales threw
+ * the ingredient numbers off, and a kota with no recipe has no known
+ * ingredients to match against, so only the whole shelf can be the reset point.
+ * The count date moves only then too, because recipe suggestions compare every
+ * ingredient against what was sold since that date.
  */
-export const setStockCounts = (s: AppState, counts: StockCounts, now = Date.now()): AppState =>
-  queued(
+export function setStockCounts(s: AppState, counts: StockCounts, now = Date.now()): AppState {
+  const full = isFullCount(s, counts)
+  const products = withCounts(s.products, counts)
+  return queued(
     {
       ...s,
-      products: withCounts(s.products, counts).map((p) => (p.soldWithoutRecipe ? { ...p, soldWithoutRecipe: 0 } : p)),
-      lastCountAt: now,
+      products: full ? products.map((p) => (p.soldWithoutRecipe ? { ...p, soldWithoutRecipe: 0 } : p)) : products,
+      ...(full ? { lastCountAt: now } : {}),
     },
     'stock',
     'update',
     now,
   )
+}
 
 /**
  * Decides what to do with a state saved before onboarding existed.

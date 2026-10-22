@@ -3,9 +3,10 @@ import { StyleSheet, Text, TextInput, View } from 'react-native'
 import MaterialIcon from '../../components/common/MaterialIcon'
 import PressableScale from '../../components/ui/PressableScale'
 import type { Product } from '../../data/types'
+import { stepFrom } from './countModel'
 import { colors, radius, space, tabular, TAP, type } from '../../theme/tokens'
 
-/** Counted quantity by product id. */
+/** Counted quantity by product id. A product that isn't in it hasn't been counted. */
 export type Counts = Record<string, number>
 
 /**
@@ -14,8 +15,12 @@ export type Counts = Record<string, number>
  *
  * Three ways to enter the same number, because counting a shelf is not one
  * job: tap + for singles, tap the crate pill for the way stock actually
- * arrives, or type it when you already know. Everything starts at zero, and
- * zero is a legitimate answer — the point is that the owner said so.
+ * arrives, or type it when you already know.
+ *
+ * A row counts only once the owner touches it. Until then it shows what the app
+ * thinks is there, greyed, and − and + start from that number; a row left alone
+ * is not saved, so an item nobody looked at never becomes a counted number. Zero
+ * is a legitimate answer — the point is that the owner said so.
  */
 export default function StockCountList({
   products,
@@ -33,8 +38,11 @@ export default function StockCountList({
         <CountRow
           key={p.id}
           product={p}
-          value={counts[p.id] ?? 0}
-          onChange={(n) => onChange({ ...counts, [p.id]: n })}
+          counted={counts[p.id]}
+          onChange={(n) => {
+            const { [p.id]: _old, ...rest } = counts
+            onChange(n === undefined ? rest : { ...rest, [p.id]: n })
+          }}
         />
       ))}
     </View>
@@ -47,25 +55,29 @@ const parse = (t: string) => Number(t.replace(',', '.').replace(/[^\d.]/g, ''))
 
 function CountRow({
   product,
-  value,
+  counted,
   onChange,
 }: {
   product: Product
-  value: number
-  onChange: (n: number) => void
+  /** Undefined until the owner touches the row. */
+  counted: number | undefined
+  /** Undefined takes the row back to not counted. */
+  onChange: (n: number | undefined) => void
 }) {
   // The field keeps its own text so a half-typed "1," survives the keystroke
-  // that would otherwise round it away.
-  const [text, setText] = useState(show(value))
+  // that would otherwise round it away. Empty while the row is not counted.
+  const [text, setText] = useState(counted === undefined ? '' : show(counted))
+  // What − and + start from, and what the greyed field shows before a count
+  const shown = counted ?? Math.max(0, product.stock)
 
   // Things sold by weight go up in halves; everything else is countable
   const step = product.unit === 'kg' ? 0.5 : 1
   const hasPack = product.packSize > 1
 
-  const commit = (n: number) => {
-    const clamped = Math.max(0, Math.round(n * 1000) / 1000)
-    setText(show(clamped))
-    onChange(clamped)
+  const commit = (by: number) => {
+    const n = stepFrom(counted, product.stock, by)
+    setText(show(n))
+    onChange(n)
   }
 
   return (
@@ -82,32 +94,36 @@ function CountRow({
 
       <View style={styles.controls}>
         <PressableScale
-          onPress={() => commit(value - step)}
-          disabled={value <= 0}
+          onPress={() => commit(-step)}
+          disabled={shown <= 0}
           accessibilityLabel={`One fewer ${product.name}`}
-          style={[styles.step, value <= 0 && styles.stepOff]}
+          style={[styles.step, shown <= 0 && styles.stepOff]}
         >
-          <MaterialIcon name="remove" size={18} color={value <= 0 ? colors.muted : colors.ink} />
+          <MaterialIcon name="remove" size={18} color={shown <= 0 ? colors.muted : colors.ink} />
         </PressableScale>
 
         <TextInput
           value={text}
           onChangeText={(t) => {
             setText(t)
+            // Emptying the field takes the row back to not counted
+            if (!t.trim()) return onChange(undefined)
             const n = parse(t)
-            // An empty or half-typed field means zero until it says otherwise
+            // A half-typed field means zero until it says otherwise
             onChange(Number.isFinite(n) ? Math.max(0, n) : 0)
           }}
-          onBlur={() => setText(show(value))}
+          onBlur={() => setText(counted === undefined ? '' : show(counted))}
+          placeholder={show(shown)}
+          placeholderTextColor={colors.muted}
           keyboardType="decimal-pad"
           inputMode="decimal"
           selectTextOnFocus
-          accessibilityLabel={`How many ${product.unitPlural} of ${product.name}`}
+          accessibilityLabel={`How many ${product.unitPlural} of ${product.name}${counted === undefined ? ', not counted yet' : ''}`}
           style={styles.field}
         />
 
         <PressableScale
-          onPress={() => commit(value + step)}
+          onPress={() => commit(step)}
           accessibilityLabel={`One more ${product.name}`}
           style={styles.step}
         >
@@ -118,7 +134,7 @@ function CountRow({
       {/* Stock arrives by the crate, so counting by the crate is the fast path */}
       {hasPack && (
         <PressableScale
-          onPress={() => commit(value + product.packSize)}
+          onPress={() => commit(product.packSize)}
           accessibilityLabel={`Add a ${product.packLabel} of ${product.name}`}
           style={styles.pack}
         >
