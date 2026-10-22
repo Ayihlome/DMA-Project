@@ -15,8 +15,6 @@ import { useAuth, type AuthState } from '../../providers/AuthProvider'
 import { supabase } from '../../lib/supabase'
 import { actions, relativeTime } from '../../core'
 import { pricesFor } from '../../data/inventory'
-import * as Haptics from 'expo-haptics'
-import { DAY_NAMES, restockDayName, restockDayOf } from '../Restock/restockModel'
 import { QUEUE_KEY } from '../../lib/telemetry'
 import { colors, fonts, radius, space, type } from '../../theme/tokens'
 
@@ -63,7 +61,6 @@ export default function ProfileScreen() {
 
   const [editOpen, setEditOpen] = useState(false)
   const [suppliersOpen, setSuppliersOpen] = useState(false)
-  const [dayOpen, setDayOpen] = useState(false)
   const [confirmDelete, setConfirmDelete] = useState(false)
   const [deleting, setDeleting] = useState(false)
   const [exporting, setExporting] = useState(false)
@@ -153,11 +150,6 @@ export default function ProfileScreen() {
           <ListRow title="Menu" detail="Food you make and its ingredients" onPress={() => router.push('/menu')} />
           <ListRow title="Edit sell grid" detail="Move and hide tiles on Sell" onPress={() => router.navigate('/sales?edit=1')} />
           <ListRow
-            title="Shopping day"
-            detail={`${restockDayName(state)} · Your shopping list is made for this day`}
-            onPress={() => setDayOpen(true)}
-          />
-          <ListRow
             title="Suppliers"
             detail={`${state.suppliers.length} saved`}
             onPress={() => setSuppliersOpen(true)}
@@ -227,7 +219,6 @@ export default function ProfileScreen() {
 
       <EditProfileSheet visible={editOpen} onClose={() => setEditOpen(false)} />
       <SuppliersSheet visible={suppliersOpen} onClose={() => setSuppliersOpen(false)} />
-      <ShoppingDaySheet visible={dayOpen} onClose={() => setDayOpen(false)} />
     </>
   )
 }
@@ -264,46 +255,6 @@ function EditProfileForm({ onSave }: { onSave: (p: { ownerName: string; storeNam
         onPress={() => onSave({ ownerName: ownerName.trim(), storeName: storeName.trim() })}
       />
     </View>
-  )
-}
-
-/** Monday first — how a shop week reads — though the app counts from Sunday. */
-const WEEK = [1, 2, 3, 4, 5, 6, 0]
-
-/** Which day the owner goes shopping. Restock plans each list to last until the next one. */
-function ShoppingDaySheet({ visible, onClose }: { visible: boolean; onClose: () => void }) {
-  const store = useStore()
-  const current = restockDayOf(store.state)
-  return (
-    <BottomSheet visible={visible} onClose={onClose} title="Shopping day">
-      {(finish) => (
-        <View style={styles.form}>
-          <Text style={styles.sheetLead}>Which day do you usually buy stock? Your shopping list is made for that day.</Text>
-          <View style={styles.days}>
-            {WEEK.map((d) => {
-              const on = d === current
-              return (
-                <View key={d} style={styles.dayCell}>
-                  <PressableScale
-                    onPress={() => {
-                      Haptics.selectionAsync()
-                      store.setRestockDay(d)
-                      finish()
-                    }}
-                    accessibilityRole="button"
-                    accessibilityState={{ selected: on }}
-                    accessibilityLabel={DAY_NAMES[d]}
-                    style={[styles.day, on && styles.dayOn]}
-                  >
-                    <Text style={styles.dayText}>{DAY_NAMES[d]}</Text>
-                  </PressableScale>
-                </View>
-              )
-            })}
-          </View>
-        </View>
-      )}
-    </BottomSheet>
   )
 }
 
@@ -389,18 +340,5 @@ const styles = StyleSheet.create({
 
   form: { gap: space.lg },
   sheetLead: { ...type.body, color: colors.ink },
-  days: { flexDirection: 'row', flexWrap: 'wrap', marginHorizontal: -space.xs },
-  dayCell: { width: '50%', padding: space.xs },
-  day: {
-    height: 52,
-    borderRadius: radius.md,
-    borderWidth: 2,
-    borderColor: 'transparent',
-    backgroundColor: colors.field,
-    alignItems: 'center',
-    justifyContent: 'center',
-  },
-  dayOn: { backgroundColor: colors.brandSoft, borderColor: colors.ink },
-  dayText: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
   sheetHint: { ...type.caption, color: colors.quiet, paddingTop: space.md },
 })

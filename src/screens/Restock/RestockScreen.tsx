@@ -17,7 +17,7 @@ import { useHints } from '../../lib/hints'
 import { paidPerUnit, unpricedLines } from '../StockIn/stockInModel'
 import { useStore } from '../../store'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
-import { groupBySupplier, packText, restockDayName, restockList, type RestockItem } from './restockModel'
+import { groupBySupplier, packText, restockList, type RestockItem } from './restockModel'
 
 const SIDE = 28
 
@@ -136,7 +136,7 @@ export default function RestockScreen() {
         <Text style={styles.title} accessibilityRole="header">
           Shopping list
         </Text>
-        <Text style={styles.subtitle}>{`Your shopping list for ${restockDayName(store.state)}`}</Text>
+        <Text style={styles.subtitle}>What to buy so you last the next week</Text>
 
         {unpriced.length ? (
           <PaidPrompt
@@ -172,7 +172,7 @@ export default function RestockScreen() {
             />
           </View>
         ) : items.length === 0 ? (
-          <Text style={styles.empty}>{`Nothing to buy — everything should last past ${restockDayName(store.state)}.`}</Text>
+          <Text style={styles.empty}>Nothing to buy — everything should last the next week.</Text>
         ) : (
           groups.map((g) => (
             <Animated.View key={g.supplierId || 'none'} layout={REFLOW} style={styles.group}>

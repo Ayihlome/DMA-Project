@@ -5,21 +5,10 @@ import { dailyUsage, pricesFor, stockItems, stockUncounted, supplierName, unitQt
 import type { AppState, Product } from '../../data/types'
 
 /**
- * When the shop restocks: weekly, on the day set in Profile (Thursday until the
- * owner picks one). 0 = Sunday … 6 = Saturday.
+ * How many days the list buys for: the next week, whatever day it is. There is
+ * no shopping day to set (a shop's restockDay from before is ignored).
  */
-export const RESTOCK_DAY = 4
-export const RESTOCK_EVERY_DAYS = 7
-export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
-
-/** The shop's shopping day. */
-export const restockDayOf = (s: AppState) => s.restockDay ?? RESTOCK_DAY
-export const restockDayName = (s: AppState) => DAY_NAMES[restockDayOf(s)]
-
-/** Days from today to the next shopping day. Today counts as the shopping day. */
-export function daysToShopping(now = Date.now(), day = RESTOCK_DAY) {
-  return (day - new Date(now).getDay() + 7) % 7
-}
+export const LIST_COVERS_DAYS = 7
 
 export type RestockItem = {
   product: Product
@@ -37,12 +26,9 @@ export type RestockItem = {
 export type RestockGroup = { supplierId: string; supplier: string; items: RestockItem[] }
 
 /**
- * What to buy on the next shopping day.
+ * What to buy so the shop lasts the next week.
  *
- * Spec: suggested = (average daily sales × days until next restock) − stock,
- * rounded up to whole packs. "Days until next restock" is counted from today to
- * the trip *after* this one — what's bought on Thursday has to last until the
- * Thursday after, and today's stock is being sold until then too.
+ * Suggested = (average daily sales × 7 days) − stock, rounded up to whole packs.
  *
  * One guard the formula doesn't have: anything at or below zero gets at least a
  * pack. An item that's out sells nothing, its average drops to nothing, and the
@@ -51,7 +37,7 @@ export type RestockGroup = { supplierId: string; supplier: string; items: Restoc
 export function restockList(s: AppState, now = Date.now()): RestockItem[] {
   // Nothing counted yet: every item reads as empty, and the list would be noise
   if (stockUncounted(s)) return []
-  const horizon = daysToShopping(now, restockDayOf(s)) + RESTOCK_EVERY_DAYS
+  const horizon = LIST_COVERS_DAYS
 
   const out: RestockItem[] = []
   for (const p of stockItems(s)) {
