@@ -10,7 +10,7 @@ import { useStore } from '../../store'
 import { colors, DURATION, fonts, radius, space, type } from '../../theme/tokens'
 import { pluralOf } from '../../lib/format'
 import { makePortion } from '../../data/actions'
-import { autoName, categoryFor, drinkName, type SellGroup } from './productFormModel'
+import { autoName, categoryFor, drinkName, unitHint, type SellGroup } from './productFormModel'
 
 const GROUPS = [
   { key: 'none', label: 'Its own tile' },
@@ -142,7 +142,7 @@ export default function ProductEditScreen() {
             value={unit}
             onChangeText={setUnit}
             autoCapitalize="none"
-            hint="One word. It's used in “per loaf” and “3 loaves left”."
+            hint={unitHint(unit)}
           />
         )}
         <FilledInput label="Short description (optional)" value={detail} onChangeText={setDetail} />

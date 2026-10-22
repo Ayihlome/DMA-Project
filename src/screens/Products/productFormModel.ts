@@ -2,6 +2,7 @@
  * The product form's derived fields, worked out with no React in it.
  */
 import type { CategoryKey } from '../../data/types'
+import { pluralOf } from '../../lib/format'
 
 export type SellGroup = 'none' | 'bread' | 'colddrink'
 
@@ -30,4 +31,11 @@ export function drinkName(brand: string, size: string): string {
  */
 export function autoName(name: string, lastAuto: string, brand: string, size: string): string {
   return !name.trim() || name === lastAuto ? drinkName(brand, size) : name
+}
+
+/** The hint under the unit field, in the owner's own unit: "per can" and "3 cans left", not always loaves. */
+export function unitHint(unit: string): string {
+  const u = unit.trim().toLowerCase()
+  if (!u) return 'One word, like can or loaf. It shows as “per can” and “3 cans left”.'
+  return `One word. It shows as “per ${u}” and “3 ${pluralOf(u)} left”.`
 }

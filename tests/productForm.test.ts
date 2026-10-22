@@ -2,7 +2,7 @@
  * The product form's derived fields: what it no longer asks the owner, it works out.
  */
 import { describe, expect, it } from 'vitest'
-import { autoName, categoryFor, drinkName } from '../src/screens/Products/productFormModel'
+import { autoName, categoryFor, drinkName, unitHint } from '../src/screens/Products/productFormModel'
 
 describe('category, derived instead of asked', () => {
   it('follows the Sell group for bread and cold drinks', () => {
@@ -40,5 +40,17 @@ describe('cold drink name from brand and size', () => {
   it('never overwrites a name the owner typed', () => {
     expect(autoName('Coca-Cola 330ml', 'Coke can', 'Coke', '500ml')).toBe('Coca-Cola 330ml')
     expect(autoName('My special', 'Coke 500ml', 'Coke', '2L')).toBe('My special')
+  })
+})
+
+describe('the unit hint', () => {
+  it('uses the unit the owner typed', () => {
+    expect(unitHint('can')).toBe('One word. It shows as “per can” and “3 cans left”.')
+    expect(unitHint('Loaf')).toBe('One word. It shows as “per loaf” and “3 loaves left”.')
+    expect(unitHint('kg')).toBe('One word. It shows as “per kg” and “3 kg left”.')
+  })
+
+  it('gives an example before anything is typed', () => {
+    expect(unitHint('')).toBe('One word, like can or loaf. It shows as “per can” and “3 cans left”.')
   })
 })
