@@ -11,6 +11,8 @@ import { colors, fonts, money, radius, space } from '../../theme/tokens'
 import { homeSummary, profitRow, salesLine } from './homeModel'
 import { commonBrands } from '../../data/starterPacks'
 import { nothingToSell, stockItems } from '../../data/inventory'
+import { useHints } from '../../lib/hints'
+import { recipePromptFor } from '../Menu/menuModel'
 
 /** Spec: header height 300. */
 const HEADER = 300
@@ -29,6 +31,9 @@ export default function HomeScreen() {
   // A shop that skipped setup: point it at adding products, and hide what needs stock to mean anything
   const empty = nothingToSell(store.state)
   const hasStock = stockItems(store.state).length > 0
+  // Prompt 2: food sold three times with no recipe, asked about once per item (never on Sell)
+  const hints = useHints()
+  const noRecipe = hints.ready ? recipePromptFor(store.state, hints.hints) : null
   // Hidden until something sold this week has a known cost
   const profit = useMemo(() => profitRow(store.state), [store.state])
 
@@ -108,6 +113,36 @@ export default function HomeScreen() {
               accessibilityLabel={`Add ${brands.length} common brands`}
             >
               <Text style={styles.offerBtnText}>{`Add ${brands.length}`}</Text>
+            </PressableScale>
+          </View>
+        </View>
+      ) : null}
+
+      {noRecipe ? (
+        <View style={styles.offer} accessibilityRole="summary">
+          <Text style={styles.offerTitle}>{`${noRecipe.name} has no recipe yet`}</Text>
+          <Text style={styles.offerText}>
+            {`Sold ${noRecipe.soldWithoutRecipe} times, and none of its ingredients came off stock. Add what goes into one, and every sale takes them off by itself.`}
+          </Text>
+          <View style={styles.offerRow}>
+            <PressableScale
+              onPress={() => hints.mark(`recipe:${noRecipe.id}`, 'dismissed')}
+              containerStyle={styles.flex}
+              style={styles.offerNo}
+              accessibilityLabel={`Not now, don't ask about ${noRecipe.name}'s recipe again`}
+            >
+              <Text style={styles.offerBtnText}>Not now</Text>
+            </PressableScale>
+            <PressableScale
+              onPress={() => {
+                hints.mark(`recipe:${noRecipe.id}`, 'done')
+                router.push({ pathname: '/menu', params: { edit: noRecipe.id } })
+              }}
+              containerStyle={styles.flex}
+              style={styles.offerYes}
+              accessibilityLabel={`Add ingredients to ${noRecipe.name}`}
+            >
+              <Text style={styles.offerBtnText}>Add ingredients</Text>
             </PressableScale>
           </View>
         </View>

@@ -1,6 +1,7 @@
 import React, { useCallback, useMemo, useState } from 'react'
 import { ScrollView, StyleSheet, Text, View } from 'react-native'
 import { useSafeAreaInsets } from 'react-native-safe-area-context'
+import { useLocalSearchParams } from 'expo-router'
 import ActionToast, { type Toast } from '../../components/ui/ActionToast'
 import ListRow from '../../components/ui/ListRow'
 import PrimaryButton from '../../components/ui/PrimaryButton'
@@ -35,7 +36,12 @@ function detailFor(p: Product) {
 export default function MenuScreen() {
   const insets = useSafeAreaInsets()
   const { state } = useStore()
-  const [edit, setEdit] = useState<MenuEdit | null>(null)
+  // Opened from Home's "has no recipe yet" card: straight into that item's editor
+  const { edit: editId } = useLocalSearchParams<{ edit?: string }>()
+  const [edit, setEdit] = useState<MenuEdit | null>(() => {
+    const p = editId ? state.products.find((x) => x.id === editId && x.composite) : undefined
+    return p ? { group: p.menu ?? '', product: p } : null
+  })
   const [kitchenOpen, setKitchenOpen] = useState(false)
   // The kitchen questions only change kotas still on the standard recipe
   const hasStandard = useMemo(() => state.products.some(isStandardKota), [state.products])
