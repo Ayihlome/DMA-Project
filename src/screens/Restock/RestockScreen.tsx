@@ -92,13 +92,15 @@ export default function RestockScreen() {
         productId: it.product.id,
         supplierId: it.supplierId,
         qty: qtyFor(it),
-        unitPrice: it.unitPrice,
+        // Nothing here says what was actually paid, only what a supplier listed, so no
+        // price is recorded and each item's cost stays as it was. Stock came in takes the real price.
+        unitPrice: 0,
       })),
     )
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     // A mis-tap here would add a whole trip of stock, so the toast carries Undo
     setToast({
-      message: `Stock updated · ${ticked.length} item${ticked.length === 1 ? '' : 's'} · ${money(total)}`,
+      message: `Stock updated · ${ticked.length} item${ticked.length === 1 ? '' : 's'}`,
       action: {
         label: 'Undo',
         onPress: () => {
@@ -170,7 +172,8 @@ export default function RestockScreen() {
       {items.length > 0 ? (
         <View style={[styles.bar, { paddingBottom: barBottom }]}>
           <View style={styles.summary}>
-            <Text style={styles.count}>{`${ticked.length} item${ticked.length === 1 ? '' : 's'}`}</Text>
+            {/* From listed prices, never from what was paid */}
+            <Text style={styles.count}>{`${ticked.length} item${ticked.length === 1 ? '' : 's'} · Estimated total`}</Text>
             <RollingNumber value={money(total)} style={styles.total} />
           </View>
           <PrimaryButton label="Bought it · update stock" onPress={bought} disabled={ticked.length === 0} />

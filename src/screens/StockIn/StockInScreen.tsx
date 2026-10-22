@@ -11,10 +11,11 @@ import PressableScale from '../../components/ui/PressableScale'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import RollingNumber from '../../components/ui/RollingNumber'
 import { useStore } from '../../store'
-import { pricesFor, stockItems, unitQty } from '../../data/inventory'
+import { stockItems, unitQty } from '../../data/inventory'
 import type { Product } from '../../data/types'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { packText } from '../Restock/restockModel'
+import { paidPerUnit } from './stockInModel'
 
 const SIDE = 28
 const OPEN = FadeIn.duration(200)
@@ -64,14 +65,8 @@ export default function StockInScreen() {
   /** Units in one step of the stepper: a whole pack, or one loose unit. */
   const perStep = (p: Product) => (loose[p.id] ? 1 : Math.max(1, p.packSize))
 
-  /** Per-unit price to record: what was typed (per pack, or per unit when loose), else this supplier's, else the cheapest, else average cost. */
-  const unitPriceFor = (p: Product) => {
-    const typed = parse(paid[p.id] ?? '')
-    if (typed > 0) return Math.round((typed / perStep(p)) * 100) / 100
-    const prices = pricesFor(store.state, p.id)
-    const known = prices.find((x) => x.supplierId === supplierId) ?? prices[0]
-    return known?.unitPrice ?? p.cost
-  }
+  /** Per-unit price to record: only what was typed (per pack, or per unit when loose). Nothing typed records 0, which leaves the cost as it was. */
+  const unitPriceFor = (p: Product) => paidPerUnit(paid[p.id], perStep(p))
 
   const chosen = stockItems(store.state).filter((p) => (packs[p.id] ?? 0) > 0)
   const total = chosen.reduce((t, p) => t + (packs[p.id] ?? 0) * perStep(p) * unitPriceFor(p), 0)
@@ -207,7 +202,7 @@ export default function StockInScreen() {
                       value={paid[p.id] ?? ''}
                       onChangeText={(t) => setPaid((m) => ({ ...m, [p.id]: t }))}
                       keyboardType="decimal-pad"
-                      placeholder={String(Math.round(unitPriceFor(p) * perStep(p) * 100) / 100)}
+                      placeholder="Optional"
                       placeholderTextColor={colors.quiet}
                       style={styles.paidInput}
                       accessibilityLabel={`Paid per ${countWord(p, !!loose[p.id])} for ${p.name}`}
@@ -226,7 +221,8 @@ export default function StockInScreen() {
       <View style={[styles.bar, { paddingBottom: insets.bottom + space.lg }]}>
         <View style={styles.summary}>
           <Text style={styles.count}>{`${chosen.length} item${chosen.length === 1 ? '' : 's'}${supplier ? ` · ${supplier.name}` : ''}`}</Text>
-          <RollingNumber value={money(total)} style={styles.total} />
+          {/* Only what was typed: an item with no price adds nothing rather than a guess */}
+          <RollingNumber value={total > 0 ? money(total) : 'No price'} style={styles.total} />
         </View>
         <PrimaryButton label="Add to stock" onPress={save} disabled={chosen.length === 0} />
       </View>
