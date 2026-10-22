@@ -7,10 +7,10 @@ import FilledInput from '../../components/ui/FilledInput'
 import PressableScale from '../../components/ui/PressableScale'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import { useStore } from '../../store'
-import { CATEGORIES, type CategoryKey } from '../../data/types'
 import { colors, DURATION, fonts, radius, space, type } from '../../theme/tokens'
 import { pluralOf } from '../../lib/format'
 import { makePortion } from '../../data/actions'
+import { categoryFor, type SellGroup } from './productFormModel'
 
 const GROUPS = [
   { key: 'none', label: 'Its own tile' },
@@ -51,7 +51,6 @@ export default function ProductEditScreen() {
   const [name, setName] = useState(existing?.name ?? '')
   const [unit, setUnit] = useState(existing?.unit ?? '')
   const [detail, setDetail] = useState(existing?.detail ?? '')
-  const [category, setCategory] = useState<CategoryKey>(existing?.category ?? 'pantry')
   const [price, setPrice] = useState(existing ? String(existing.price) : '')
   const [packSize, setPackSize] = useState(existing ? String(existing.packSize) : '1')
   const [packName, setPackName] = useState(existing ? packNameOf(existing.packLabel) : '')
@@ -62,7 +61,7 @@ export default function ProductEditScreen() {
     existing && existing.cost > 0 ? String(Math.round(existing.cost * existing.packSize * 100) / 100) : '',
   )
   const [costTouched, setCostTouched] = useState(false)
-  const [group, setGroup] = useState<'none' | 'bread' | 'colddrink'>(
+  const [group, setGroup] = useState<SellGroup>(
     existing?.family === 'bread' || existing?.family === 'colddrink' ? existing.family : 'none',
   )
   const [brand, setBrand] = useState(existing?.variant ?? '')
@@ -90,7 +89,7 @@ export default function ProductEditScreen() {
     const input = {
       name: name.trim(),
       detail: detail.trim() || u,
-      category,
+      category: categoryFor(existing?.category, showGroup ? group : 'none'),
       price: priceVal,
       stock: isNew ? stockVal : existing!.stock,
       unit: u,
@@ -140,30 +139,6 @@ export default function ProductEditScreen() {
         )}
         <FilledInput label="Short description (optional)" value={detail} onChangeText={setDetail} />
         <FilledInput label="Selling price" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
-
-        <View style={styles.section}>
-          <Text style={styles.sectionTitle}>Category</Text>
-          <View style={styles.chips}>
-            {CATEGORIES.map((c) => {
-              const on = c.key === category
-              return (
-                <PressableScale
-                  key={c.key}
-                  onPress={() => {
-                    Haptics.selectionAsync()
-                    setCategory(c.key)
-                  }}
-                  accessibilityRole="button"
-                  accessibilityState={{ selected: on }}
-                  style={[styles.chip, on && styles.chipOn]}
-                  hitSlop={4}
-                >
-                  <Text style={styles.chipText}>{c.label}</Text>
-                </PressableScale>
-              )
-            })}
-          </View>
-        </View>
 
         {showGroup ? (
           <View style={styles.section}>
