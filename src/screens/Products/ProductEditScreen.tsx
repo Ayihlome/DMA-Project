@@ -7,10 +7,10 @@ import FilledInput from '../../components/ui/FilledInput'
 import PressableScale from '../../components/ui/PressableScale'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import { useStore } from '../../store'
-import { colors, DURATION, fonts, radius, space, type } from '../../theme/tokens'
+import { colors, DURATION, fonts, money, radius, space, type } from '../../theme/tokens'
 import { pluralOf } from '../../lib/format'
 import { makePortion } from '../../data/actions'
-import { autoName, categoryFor, drinkName, unitHint, type SellGroup } from './productFormModel'
+import { autoName, categoryFor, drinkName, formSummary, unitHint, type SellGroup } from './productFormModel'
 
 const GROUPS = [
   { key: 'none', label: 'Its own tile' },
@@ -81,6 +81,17 @@ export default function ProductEditScreen() {
   const unitWord = unit.trim().toLowerCase() || 'item'
   const packCount = parseNumber(packSize)
   const perPack = packCount > 1 ? packName.trim() || 'pack' : unitWord
+  const summary = formSummary(
+    {
+      name,
+      unit: unitWord,
+      price: Number.isFinite(parseNumber(price)) ? parseNumber(price) : 0,
+      packSize: Number.isFinite(packCount) && packCount > 0 ? packCount : 1,
+      packName,
+      packCost: Number.isFinite(parseNumber(packCost)) ? parseNumber(packCost) : undefined,
+    },
+    money,
+  )
 
   function save() {
     const priceVal = parseNumber(price)
@@ -146,7 +157,7 @@ export default function ProductEditScreen() {
           />
         )}
         <FilledInput label="Short description (optional)" value={detail} onChangeText={setDetail} />
-        <FilledInput label="Selling price" value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
+        <FilledInput label={`What do you sell one ${unitWord} for?`} value={price} onChangeText={setPrice} keyboardType="decimal-pad" />
 
         {showGroup ? (
           <View style={styles.section}>
@@ -202,10 +213,11 @@ export default function ProductEditScreen() {
             <Text style={styles.sectionTitle}>How you buy it</Text>
             <Text style={styles.hint}>Restock suggests whole packs, so it needs to know what a pack is.</Text>
             <FilledInput
-              label={`How many ${pluralOf(unitWord)} in what you buy`}
+              label={`How many ${pluralOf(unitWord)} in what you buy?`}
               value={packSize}
               onChangeText={setPackSize}
               keyboardType="number-pad"
+              hint="Put 1 if you buy them one at a time."
             />
             {packCount > 1 ? (
               <FilledInput
@@ -220,7 +232,7 @@ export default function ProductEditScreen() {
 
         {madeToOrder ? null : (
           <FilledInput
-            label={`What you pay for one ${perPack} (optional)`}
+            label={`What do you pay for one ${perPack}? (optional)`}
             value={packCost}
             onChangeText={(t) => {
               setPackCost(t)
@@ -260,6 +272,17 @@ export default function ProductEditScreen() {
           />
         ) : null}
 
+        {/* The answers read back in shop words, so a wrong number shows before saving */}
+        {!madeToOrder && summary.length ? (
+          <View style={styles.note} accessibilityRole="summary">
+            {summary.map((line) => (
+              <Text key={line} style={styles.summaryLine}>
+                {line}
+              </Text>
+            ))}
+          </View>
+        ) : null}
+
         <PrimaryButton label={isNew ? 'Add product' : 'Save changes'} onPress={save} />
       </ScrollView>
     </KeyboardAvoidingView>
@@ -281,6 +304,7 @@ const styles = StyleSheet.create({
   section: { gap: space.sm },
   sectionTitle: { ...type.bodyStrong, color: colors.ink },
   hint: { ...type.caption, color: colors.quiet },
+  summaryLine: { ...type.body, color: colors.ink },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {
     height: 38,

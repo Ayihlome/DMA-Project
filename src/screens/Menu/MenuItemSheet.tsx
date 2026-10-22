@@ -12,6 +12,7 @@ import type { Product, RecipeLine } from '../../data/types'
 import { colors, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { menuNames } from '../Sell/sellModel'
 import { recipeStatusLabel } from './menuModel'
+import { formSummary } from '../Products/productFormModel'
 
 /** What the editor is opened for: a new item in a group, or an existing item. */
 export type MenuEdit = { group: string; product?: Product }
@@ -354,6 +355,7 @@ function NewIngredient({
   const unitWord = unit === 'piece' ? 'piece' : unit === 'slice' ? 'slice' : unit
   const served = servedAs.trim().toLowerCase()
   const portion = makePortion(servedAs, parse(perUnit)) ?? undefined
+  const summary = formSummary({ name, unit: unitWord, packSize, packCost: parse(packPrice) > 0 ? parse(packPrice) : undefined }, money)
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
@@ -379,13 +381,14 @@ function NewIngredient({
       </View>
 
       <FilledInput
-        label={`How many ${unit === 'kg' || unit === 'L' ? unit : `${unit}s`} in what you buy`}
+        label={`How many ${unit === 'kg' || unit === 'L' ? unit : `${unit}s`} in what you buy?`}
         value={pack}
         onChangeText={setPack}
         keyboardType="decimal-pad"
+        hint="Put 1 if you buy them one at a time."
       />
       <FilledInput
-        label="What you pay for that (optional)"
+        label={`What do you pay for ${packSize > 1 ? `those ${packSize}` : `one ${unitWord}`}? (optional)`}
         value={packPrice}
         onChangeText={setPackPrice}
         keyboardType="decimal-pad"
@@ -408,6 +411,17 @@ function NewIngredient({
           />
         ) : null}
       </View>
+
+      {/* The answers read back, so a wrong number shows before saving */}
+      {summary.length ? (
+        <View style={styles.summary} accessibilityRole="summary">
+          {summary.map((line) => (
+            <Text key={line} style={styles.summaryLine}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : null}
 
       <PrimaryButton
         label="Create and add"
@@ -438,6 +452,8 @@ const styles = StyleSheet.create({
   heading: { ...type.titleSm, color: colors.ink, flexShrink: 1 },
   section: { gap: space.sm },
   sectionTitle: { ...type.bodyStrong, color: colors.ink },
+  summary: { gap: space.xs, padding: space.lg, borderRadius: radius.sm, backgroundColor: colors.brandSoft },
+  summaryLine: { ...type.body, color: colors.ink },
   sectionHint: { ...type.caption, color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {
