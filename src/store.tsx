@@ -65,7 +65,10 @@ export function StoreProvider({
       const [saved, savedPhotos, savedOwner] = await Promise.all([
         load<unknown>(A.STATE_KEY),
         load<Record<string, string>>(A.PHOTO_KEY),
-        load<string>(A.OWNER_KEY),
+        // Stored as the bare id (see setItem below), not JSON. Reading it through load()
+        // made JSON.parse throw, so it always came back null and every account counted as
+        // the owner: a second person signing in on this device got the first one's shop.
+        AsyncStorage.getItem(A.OWNER_KEY).catch(() => null),
       ])
       if (!alive) return
 
