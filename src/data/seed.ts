@@ -42,7 +42,7 @@ export const PRODUCTS: Product[] = [
     family: 'colddrink',
     variant: 'Coke',
     size: 'can',
-    name: 'Coca-Cola 330ml',
+    name: 'Coke can',
     detail: 'Cold drink, can',
     category: 'beverages',
     icon: 'local_bar',
@@ -226,8 +226,9 @@ const drink = (brand: string, sizeIndex: number, stock: number): Product => {
   const z = SIZES[sizeIndex]
   return {
     id: `${brand.toLowerCase()}-${z.size.toLowerCase()}`,
-    name: `${brand} ${z.label}`,
-    detail: 'Cold drink',
+    // Named brand + size, the way the product form names a cold drink
+    name: `${brand} ${z.size}`,
+    detail: `Cold drink, ${z.label}`,
     category: 'beverages',
     icon: 'local_bar',
     sellable: true,

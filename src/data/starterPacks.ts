@@ -61,9 +61,9 @@ export type StarterPack = {
 // ---------------------------------------------------------------------------
 
 const DRINKS: Template[] = [
-  { id: 'coke-can', name: 'Coca-Cola 330ml', detail: 'Cold drink, can', category: 'beverages', price: 13, unit: 'can', unitPlural: 'cans', packSize: 24, packLabel: 'tray of 24', family: 'colddrink', variant: 'Coke', size: 'can' },
-  { id: 'coke-2l', name: 'Coca-Cola 2L', detail: 'Cold drink, bottle', category: 'beverages', price: 30, unit: 'bottle', unitPlural: 'bottles', packSize: 6, packLabel: 'case of 6', family: 'colddrink', variant: 'Coke', size: '2L' },
-  { id: 'fanta-300', name: 'Fanta Orange 300ml', detail: 'Cold drink, bottle', category: 'beverages', price: 11, unit: 'bottle', unitPlural: 'bottles', packSize: 24, packLabel: 'case of 24', family: 'colddrink', variant: 'Fanta', size: '300ml' },
+  { id: 'coke-can', name: 'Coke can', detail: 'Cold drink, 330ml can', category: 'beverages', price: 13, unit: 'can', unitPlural: 'cans', packSize: 24, packLabel: 'tray of 24', family: 'colddrink', variant: 'Coke', size: 'can' },
+  { id: 'coke-2l', name: 'Coke 2L', detail: 'Cold drink, 2L bottle', category: 'beverages', price: 30, unit: 'bottle', unitPlural: 'bottles', packSize: 6, packLabel: 'case of 6', family: 'colddrink', variant: 'Coke', size: '2L' },
+  { id: 'fanta-300', name: 'Fanta 300ml', detail: 'Cold drink, orange, 300ml bottle', category: 'beverages', price: 11, unit: 'bottle', unitPlural: 'bottles', packSize: 24, packLabel: 'case of 24', family: 'colddrink', variant: 'Fanta', size: '300ml' },
   { id: 'water-500', name: 'Still Water 500ml', detail: 'Bottled water', category: 'beverages', price: 9, unit: 'bottle', unitPlural: 'bottles', packSize: 24, packLabel: 'case of 24' },
   { id: 'energy-440', name: 'Energy Drink 440ml', detail: 'Can', category: 'beverages', price: 16, unit: 'can', unitPlural: 'cans', packSize: 24, packLabel: 'tray of 24' },
   { id: 'juice-200', name: 'Juice Blend 200ml', detail: 'Carton', category: 'beverages', price: 8, unit: 'box', unitPlural: 'boxes', packSize: 24, packLabel: 'case of 24' },
