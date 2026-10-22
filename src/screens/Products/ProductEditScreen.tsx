@@ -87,7 +87,7 @@ export default function ProductEditScreen() {
     const stockVal = parseNumber(stock)
 
     if (!name.trim()) return setError('Give the product a name.')
-    if (!madeToOrder && !unit.trim()) return setError('Say what it is counted in, e.g. loaf, can, bottle.')
+    if (!madeToOrder && !unit.trim()) return setError('Say how you count it, e.g. loaf, can, bottle.')
     if (isNaN(priceVal) || priceVal < 0) return setError('Enter the selling price.')
     if (isNew && (isNaN(stockVal) || stockVal < 0)) return setError('Enter how many you have now, or 0.')
     const packCostVal = parseNumber(packCost)
@@ -138,7 +138,7 @@ export default function ProductEditScreen() {
           </Text>
         ) : (
           <FilledInput
-            label="Counted in — loaf, can, bottle"
+            label="How do you count it? — loaf, can, bottle"
             value={unit}
             onChangeText={setUnit}
             autoCapitalize="none"
@@ -256,7 +256,7 @@ export default function ProductEditScreen() {
             value={stock}
             onChangeText={setStock}
             keyboardType="decimal-pad"
-            hint="Leave it at 0 if you're not sure. Count stock fixes it later."
+            hint="Leave it at 0 if you're not sure. Count the shelf fixes it later."
           />
         ) : null}
 

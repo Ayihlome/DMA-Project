@@ -222,7 +222,7 @@ export default function OnboardingScreen() {
               <View />
             )}
             {current === 'count' ? (
-              <PressableScale onPress={countLater} accessibilityLabel="Count stock later">
+              <PressableScale onPress={countLater} accessibilityLabel="Count the shelf later">
                 <Text style={styles.link}>Count later</Text>
               </PressableScale>
             ) : (

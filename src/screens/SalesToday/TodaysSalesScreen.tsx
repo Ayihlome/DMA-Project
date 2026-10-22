@@ -26,11 +26,11 @@ const linesOf = (sale: Sale, products: Map<string, Product>) =>
   sale.lines.map((l) => `${l.qty}× ${shortName(products.get(l.productId), l.price, l.label)}`).join(', ')
 
 /**
- * Today's sales, newest first, each with Void — reached by tapping today's
+ * Today's sales, newest first, each with Cancel sale — reached by tapping today's
  * total on Home, which is where an owner looks when the number seems wrong.
  *
- * Void asks inline before it acts (Keep it / Void sale): it changes stock and
- * the day's total, so one tap shouldn't be enough. Voided sales stay listed at
+ * Cancel sale asks inline before it acts (Keep it / Cancel sale): it changes stock and
+ * the day's total, so one tap shouldn't be enough. Cancelled sales stay listed at
  * the bottom, muted, so there's a record of what was taken back.
  */
 export default function TodaysSalesScreen() {
@@ -70,11 +70,11 @@ export default function TodaysSalesScreen() {
             {confirming === sale.id ? null : (
               <PressableScale
                 onPress={() => setConfirming(sale.id)}
-                accessibilityLabel={`Void sale of ${money(sale.total)} at ${timeOf(sale.at)}`}
+                accessibilityLabel={`Cancel sale of ${money(sale.total)} at ${timeOf(sale.at)}`}
                 style={styles.voidLink}
                 hitSlop={8}
               >
-                <Text style={styles.voidLinkText}>Void</Text>
+                <Text style={styles.voidLinkText}>Cancel sale</Text>
               </PressableScale>
             )}
           </View>
@@ -92,11 +92,11 @@ export default function TodaysSalesScreen() {
                     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Warning)
                     setConfirming(null)
                   }}
-                  accessibilityLabel="Void this sale"
+                  accessibilityLabel="Cancel this sale"
                   containerStyle={styles.flex}
                   style={styles.void}
                 >
-                  <Text style={styles.voidText}>Void sale</Text>
+                  <Text style={styles.voidText}>Cancel sale</Text>
                 </PressableScale>
               </View>
             </Animated.View>
@@ -109,7 +109,7 @@ export default function TodaysSalesScreen() {
       {today.voided.length ? (
         <Animated.View layout={REFLOW} style={styles.voidedBlock}>
           <Text style={styles.groupTitle} accessibilityRole="header">
-            Voided today
+            Cancelled today
           </Text>
           {today.voided.map((v) => (
             <View key={v.id} style={styles.voidedRow}>

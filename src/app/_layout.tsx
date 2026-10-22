@@ -108,7 +108,7 @@ function RootNavigator() {
             <Stack.Screen name="(tabs)" />
             <Stack.Screen name="products/index" options={{ ...pageHeader, title: 'Products' }} />
             <Stack.Screen name="products/[id]" options={pageHeader} />
-            <Stack.Screen name="count-stock" options={{ ...pageHeader, title: 'Count stock' }} />
+            <Stack.Screen name="count-stock" options={{ ...pageHeader, title: 'Count the shelf' }} />
             <Stack.Screen name="menu" options={{ ...pageHeader, title: 'Menu' }} />
             <Stack.Screen name="profit" options={{ ...pageHeader, title: 'Profit' }} />
             <Stack.Screen name="sales-today" options={{ ...pageHeader, title: "Today's sales" }} />

@@ -113,7 +113,7 @@ export default function HomeScreen() {
         {summary.uncounted ? (
           <ListRow
             title="Running low"
-            detail="Count your stock first to see this"
+            detail="Count the shelf first to see this"
             onPress={() => router.push('/count-stock')}
           />
         ) : summary.lowCount > 0 ? (
@@ -132,7 +132,7 @@ export default function HomeScreen() {
         <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
 
         <ListRow
-          title="Count stock"
+          title="Count the shelf"
           detail={summary.toCheck > 0 ? `${summary.toCheck} to check first` : undefined}
           onPress={() => router.push('/count-stock')}
         />

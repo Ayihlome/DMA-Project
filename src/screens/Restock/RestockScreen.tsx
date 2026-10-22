@@ -124,14 +124,14 @@ export default function RestockScreen() {
         showsVerticalScrollIndicator={false}
       >
         <Text style={styles.title} accessibilityRole="header">
-          Restock
+          Shopping list
         </Text>
         <Text style={styles.subtitle}>{`Your shopping list for ${restockDayName(store.state)}`}</Text>
 
         {uncounted ? (
           <View style={styles.emptyBlock}>
             <ListRow
-              title="Count your stock first"
+              title="Count the shelf first"
               detail="Then the list knows what you have and what's selling"
               onPress={() => router.push('/count-stock')}
               last

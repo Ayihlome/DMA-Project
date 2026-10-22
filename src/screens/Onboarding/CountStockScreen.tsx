@@ -146,7 +146,7 @@ export default function CountStockScreen() {
         keyboardDismissMode="on-drag"
       >
         <Text style={styles.title} accessibilityRole="header">
-          Count your stock
+          Count the shelf
         </Text>
         <Text style={styles.subtitle}>
           Once the app knows what is on the shelf it can tell you what is running low and what to buy.

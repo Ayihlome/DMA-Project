@@ -357,7 +357,7 @@ function NewIngredient({
       <FilledInput label="Name, e.g. Burger patty" value={name} onChangeText={setName} autoCapitalize="words" />
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Counted in</Text>
+        <Text style={styles.sectionTitle}>How do you count it?</Text>
         <View style={styles.chips}>
           {NEW_UNITS.map((u) => (
             <PressableScale

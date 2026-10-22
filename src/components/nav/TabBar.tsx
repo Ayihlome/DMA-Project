@@ -21,7 +21,7 @@ const TABS: { route: string; label: string; icon: string }[] = [
   { route: 'index', label: 'Home', icon: 'home' },
   { route: 'sales', label: 'Sell', icon: 'shopping_cart' },
   { route: 'supply', label: 'Prices', icon: 'sell' },
-  { route: 'restock', label: 'Restock', icon: 'inventory_2' },
+  { route: 'restock', label: 'Shopping list', icon: 'inventory_2' },
   { route: 'profile', label: 'Profile', icon: 'person' },
 ]
 

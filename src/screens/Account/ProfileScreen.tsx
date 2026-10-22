@@ -154,7 +154,7 @@ export default function ProfileScreen() {
           <ListRow title="Edit sell grid" detail="Move and hide tiles on Sell" onPress={() => router.navigate('/sales?edit=1')} />
           <ListRow
             title="Shopping day"
-            detail={`${restockDayName(state)} · Restock plans for this day`}
+            detail={`${restockDayName(state)} · Your shopping list is made for this day`}
             onPress={() => setDayOpen(true)}
           />
           <ListRow
@@ -278,7 +278,7 @@ function ShoppingDaySheet({ visible, onClose }: { visible: boolean; onClose: () 
     <BottomSheet visible={visible} onClose={onClose} title="Shopping day">
       {(finish) => (
         <View style={styles.form}>
-          <Text style={styles.sheetLead}>Which day do you usually buy stock? Restock makes your list for that day.</Text>
+          <Text style={styles.sheetLead}>Which day do you usually buy stock? Your shopping list is made for that day.</Text>
           <View style={styles.days}>
             {WEEK.map((d) => {
               const on = d === current
