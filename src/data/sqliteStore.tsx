@@ -19,12 +19,11 @@ import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } fro
 import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import * as A from './actions'
-import { createSeedState } from './seed'
 import type { AppState } from './types'
 import type { BackupStatus } from '../lib/cloudBackup'
 import { StoreContext } from '../store'
 import { useCases } from '../backend/useCases/container'
-import { demoShop, emptyShop, failed, newId, persistChange, persistCosts, persistSale, persistVoid, uuidify } from './sqlitePersist'
+import { emptyShop, failed, newId, persistChange, persistCosts, persistSale, persistVoid, uuidify } from './sqlitePersist'
 const SYNC_EVERY_MS = 60_000
 
 export function SqliteStoreProvider({
@@ -270,13 +269,9 @@ export function SqliteStoreProvider({
         save(next, 'applyStarterPacks', () => useCases.applyStarterPacks({ products, recipes, counts: stock, profile: next.profile }))
       },
       skipOnboarding: (profile) => {
-        // An empty shop gets the demo catalogue; one that already has products keeps them. The products and
-        // prices go in like any other edit; the onboarding flag and the profile follow in the next write.
-        change((s) => {
-          const demo = s.products.length ? null : demoShop(createSeedState())
-          const base = demo ? { ...s, products: demo.products, suppliers: demo.suppliers, prices: demo.prices, preferred: demo.preferred } : s
-          return A.skipOnboarding(base, profile)
-        })
+        // A new shop stays empty (no sample catalogue); one that already has products keeps them. The
+        // onboarding flag and the profile follow in the next write.
+        change((s) => A.skipOnboarding(s, profile))
         const { profile: saved, onboardedAt } = cur()
         enqueue(async () => failed(await useCases.markOnboarded({ profile: saved, at: onboardedAt ?? Date.now() }), 'markOnboarded'))
       },

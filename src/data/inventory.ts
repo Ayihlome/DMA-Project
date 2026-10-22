@@ -15,6 +15,9 @@ export const productById = (s: AppState, id: string) => s.products.find((p) => p
 /** Things with a count on the shelf: not composites (derived) and not untracked (airtime). */
 export const stockItems = (s: AppState) => s.products.filter((p) => !p.composite && !p.untracked)
 
+/** No product to sell yet (a shop that skipped setup): Home says "Add what you sell". */
+export const nothingToSell = (s: AppState) => !s.products.some((p) => p.sellable)
+
 /** Quantity with unit, showing small kg amounts in grams ("50 g"). */
 export function unitQty(p: Product, n: number) {
   if (p.unit === 'kg' && n < 1) return `${Math.round(n * 1000)} g`

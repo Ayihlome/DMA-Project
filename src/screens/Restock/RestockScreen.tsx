@@ -11,7 +11,7 @@ import PressableScale from '../../components/ui/PressableScale'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import RollingNumber from '../../components/ui/RollingNumber'
 import { useTabBarSpace } from '../../components/nav/TabBar'
-import { stockUncounted } from '../../data/inventory'
+import { stockItems, stockUncounted } from '../../data/inventory'
 import { useStore } from '../../store'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { groupBySupplier, packText, restockDayName, restockList, type RestockItem } from './restockModel'
@@ -128,7 +128,16 @@ export default function RestockScreen() {
         </Text>
         <Text style={styles.subtitle}>{`Your shopping list for ${restockDayName(store.state)}`}</Text>
 
-        {uncounted ? (
+        {stockItems(store.state).length === 0 ? (
+          <View style={styles.emptyBlock}>
+            <ListRow
+              title="Nothing on the list yet"
+              detail="Add what you sell, and the list fills in as it sells"
+              onPress={() => router.push('/products')}
+              last
+            />
+          </View>
+        ) : uncounted ? (
           <View style={styles.emptyBlock}>
             <ListRow
               title="Count the shelf first"

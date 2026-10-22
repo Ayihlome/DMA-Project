@@ -199,12 +199,6 @@ async function writeRecipe(uc: UseCases, p: Product) {
   return failed(await uc.setRecipeComponents({ parentProductID: p.id, components, allowEmpty: true }), `setRecipeComponents ${p.name}`)
 }
 
-/** The demo shop offered by "Skip": its catalogue, suppliers and prices, but not twelve weeks of invented takings. */
-export function demoShop(seed: AppState): AppState {
-  const { products, prices, preferred } = uuidify(seed)
-  return { ...seed, products, prices, preferred, sales: [], purchases: [], queue: [] }
-}
-
 /** A shop with nothing in it, not yet onboarded. What a new account starts from. */
 export function emptyShop(now = Date.now()): AppState {
   return {

@@ -6,6 +6,7 @@
 import type { AppState, CategoryKey, Family, PaymentMethod, Portion, Product, Profile, Purchase, PurchaseLine, RecipeLine, SaleLine, SellGridSettings, SyncOp } from './types'
 import { QUICK_AMOUNT_ID } from './types'
 import { deductionsFor, productById, recipeCost, stockItems } from './inventory'
+import { createSeedState } from './seed'
 import { buildStarterCatalogue, type StarterSelection } from './starterPacks'
 import type { BackupStatus } from '../lib/cloudBackup'
 
@@ -606,14 +607,25 @@ export function applyStarterPacks(
   )
 }
 
+/** Ids of the sample shop a new account holds until setup is finished or skipped. */
+let sampleIds: Set<string> | null = null
+const isSampleShop = (s: AppState) => {
+  sampleIds ??= new Set(createSeedState(0).products.map((p) => p.id))
+  return s.products.every((p) => sampleIds!.has(p.id))
+}
+
 /**
- * "Explore with sample data": keeps the sample catalogue, its suppliers and
- * prices to look around and sell from, and stops asking. The sample sales,
- * voids and orders go: they are invented takings, and Home, Profit and Restock
- * would show them as this shop's. The SQLite store's demoShop() does the same.
+ * "Skip setup for now": an empty shop that still sells (Quick amount), and
+ * stops asking. Everything in the sample shop goes — products, suppliers,
+ * prices, stock, costs, sales, voids and orders — because none of it is this
+ * shop's. A shop that already has products of the owner's own is left exactly
+ * as it is, so skipping never empties a real shop or the backup made from it.
  */
 export function skipOnboarding(s: AppState, profile?: Partial<Profile>, now = Date.now()): AppState {
-  return { ...s, sales: [], voidedSales: [], purchases: [], profile: { ...s.profile, ...profile }, onboardedAt: now }
+  const kept = isSampleShop(s)
+    ? { products: [], suppliers: [], prices: [], preferred: {}, sales: [], voidedSales: [], purchases: [], lastCountAt: undefined }
+    : {}
+  return { ...s, ...kept, profile: { ...s.profile, ...profile }, onboardedAt: now }
 }
 
 /** Counted quantities by product id. Anything absent is left as it was. */

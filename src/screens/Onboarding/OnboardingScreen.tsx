@@ -36,8 +36,8 @@ import { colors, fonts, money, radius, space, tabular, type } from '../../theme/
  * amounts. Every answer starts filled in, so the fastest path is Continue,
  * Continue — and all of it can be changed later.
  *
- * Skipping is always available and leaves the demo catalogue in place, which
- * is how the app is still demonstrable.
+ * Skipping is always available and gives an empty shop that still sells
+ * (Quick amount); Home then points to "Add what you sell".
  */
 
 /** Two of the six are ticked up front: they are what almost every stand makes. */
@@ -226,8 +226,8 @@ export default function OnboardingScreen() {
                 <Text style={styles.link}>Count later</Text>
               </PressableScale>
             ) : (
-              <PressableScale onPress={skip} accessibilityLabel="Explore with sample data instead">
-                <Text style={styles.link}>Explore with sample data</Text>
+              <PressableScale onPress={skip} accessibilityLabel="Skip setup for now">
+                <Text style={styles.link}>Skip setup for now</Text>
               </PressableScale>
             )}
           </View>
@@ -344,7 +344,7 @@ export default function OnboardingScreen() {
       {current === 'confirm' && catalogue.length === 0 && (
         <AuthHeading
           title="Nothing picked yet"
-          subtitle="Go back and tick at least one thing you sell, or skip and look around the sample shop first."
+          subtitle="Go back and tick at least one thing you sell, or skip setup for now and add things later."
         />
       )}
 
@@ -354,10 +354,6 @@ export default function OnboardingScreen() {
             title="Ready to go"
             subtitle={`${sellable} things to sell${ingredients ? ` and ${ingredients} ingredients` : ''}.`}
           />
-          <Text style={styles.warning}>
-            This clears the sample sales and suppliers that came with the app, so your reports start from your
-            first real sale.
-          </Text>
           <View style={styles.summary}>
             <SummaryLine icon="storefront" text={`${sellable} products on the till`} />
             {ingredients > 0 && <SummaryLine icon="kitchen" text={`${ingredients} ingredients behind the kotas`} />}
@@ -775,14 +771,6 @@ const styles = StyleSheet.create({
   summary: { gap: space.md },
   summaryLine: { flexDirection: 'row', alignItems: 'center', gap: space.md },
   summaryText: { ...type.caption, color: colors.ink, flex: 1 },
-  warning: {
-    ...type.caption,
-    color: colors.ink,
-    backgroundColor: colors.field,
-    padding: space.lg,
-    borderRadius: radius.sm,
-    overflow: 'hidden',
-  },
 
   footer: { gap: space.lg },
   footerLinks: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },

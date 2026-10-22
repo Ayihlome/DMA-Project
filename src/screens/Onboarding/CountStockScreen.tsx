@@ -166,7 +166,11 @@ export default function CountStockScreen() {
             ))}
           </View>
         ) : null}
-        <StockCountList products={countable} counts={counts} onChange={setCounts} />
+        {countable.length ? (
+          <StockCountList products={countable} counts={counts} onChange={setCounts} />
+        ) : (
+          <Text style={styles.subtitle}>Nothing to count yet. Add what you sell first, from Profile → What you sell.</Text>
+        )}
       </ScrollView>
 
       <View style={[styles.bar, { paddingBottom: insets.bottom + space.lg }]}>

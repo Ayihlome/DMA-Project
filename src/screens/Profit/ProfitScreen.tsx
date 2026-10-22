@@ -41,14 +41,20 @@ export default function ProfitScreen() {
       <Text style={styles.sectionTitle} accessibilityRole="header">
         Last 7 days
       </Text>
-      {sales ? (
+      {sales && report.covered === 0 ? (
+        // Nothing sold has a known cost (a Quick amount, or items with no cost yet): R0 kept would be invented
+        <View style={styles.summary}>
+          <Text style={styles.line}>{`Took ${money(report.takings)}`}</Text>
+          <Text style={styles.note}>{"What you kept isn't known yet: none of what sold has a cost. Add what you pay in Stock came in."}</Text>
+        </View>
+      ) : sales ? (
         <View style={styles.summary}>
           <Text style={styles.big}>{money(report.kept)}</Text>
           <Text style={styles.bigLabel}>kept after what the stock cost you</Text>
           <Text style={styles.line}>{`Took ${money(report.takings)} · stock cost ${money(report.cost)}`}</Text>
           {partial ? (
             <Text style={styles.note}>
-              {`Counts ${Math.round(report.covered * 100)}% of your takings. The rest is items with no cost yet, listed below.`}
+              {`Counts ${Math.floor(report.covered * 100)}% of your takings. The rest is items with no cost yet, listed below.`}
             </Text>
           ) : null}
           <Text style={styles.note}>Worked out from the costs you have now, not what you paid on the day.</Text>

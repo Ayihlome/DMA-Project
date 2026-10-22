@@ -10,6 +10,7 @@ import { useStore } from '../../store'
 import { colors, fonts, money, radius, space } from '../../theme/tokens'
 import { homeSummary, profitRow, salesLine } from './homeModel'
 import { commonBrands } from '../../data/starterPacks'
+import { nothingToSell, stockItems } from '../../data/inventory'
 
 /** Spec: header height 300. */
 const HEADER = 300
@@ -25,6 +26,9 @@ export default function HomeScreen() {
   const store = useStore()
   const summary = useMemo(() => homeSummary(store.state), [store.state])
   const menuCount = useMemo(() => store.state.products.filter((p) => p.composite && p.sellable).length, [store.state.products])
+  // A shop that skipped setup: point it at adding products, and hide what needs stock to mean anything
+  const empty = nothingToSell(store.state)
+  const hasStock = stockItems(store.state).length > 0
   // Hidden until something sold this week has a known cost
   const profit = useMemo(() => profitRow(store.state), [store.state])
 
@@ -110,7 +114,14 @@ export default function HomeScreen() {
       ) : null}
 
       <View style={styles.rows}>
-        {summary.uncounted ? (
+        {empty ? (
+          <ListRow
+            leading={<View style={styles.dot} />}
+            title="Add what you sell"
+            detail="Your products, so they show on Sell"
+            onPress={() => router.push('/products')}
+          />
+        ) : !hasStock ? null : summary.uncounted ? (
           <ListRow
             title="Running low"
             detail="Count the shelf first to see this"
@@ -129,13 +140,16 @@ export default function HomeScreen() {
 
         {profit ? <ListRow title={profit.title} detail={profit.detail} onPress={() => router.push('/profit')} /> : null}
 
-        <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
-
-        <ListRow
-          title="Count the shelf"
-          detail={summary.toCheck > 0 ? `${summary.toCheck} to check first` : undefined}
-          onPress={() => router.push('/count-stock')}
-        />
+        {hasStock ? (
+          <>
+            <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
+            <ListRow
+              title="Count the shelf"
+              detail={summary.toCheck > 0 ? `${summary.toCheck} to check first` : undefined}
+              onPress={() => router.push('/count-stock')}
+            />
+          </>
+        ) : null}
 
         {/* Recipes are what take ingredients off stock, so changing them is a daily job, not a setting */}
         <ListRow
