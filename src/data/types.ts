@@ -204,6 +204,13 @@ export type AppState = {
    * with what the recipes took off since then. Absent = since setup.
    */
   lastCountAt?: number
+  /**
+   * When the owner last saved a count of only some items, if that was after
+   * `lastCountAt`. Those items' stock was reset without moving the shop-wide date,
+   * so recipe suggestions are held back until the next full count has been
+   * saved. Goes once each item has its own count date (Stage 6).
+   */
+  partialCountAt?: number
   /** Absent on shops saved before the Sell grid existed; treated as defaults. */
   sellGrid?: SellGridSettings
   /** Day the owner goes shopping, 0 = Sunday … 6 = Saturday. Absent = Thursday. */

@@ -195,6 +195,10 @@ export function createLoadShopUseCase({
       ...(settings.lastCountAt != null
         ? { lastCountAt: json(settings.lastCountAt, undefined) }
         : {}),
+      // Cleared to null by a full count
+      ...(Number.isFinite(json(settings.partialCountAt, null))
+        ? { partialCountAt: json(settings.partialCountAt, null) }
+        : {}),
       ...(settings.sellGrid
         ? { sellGrid: json(settings.sellGrid, undefined) }
         : {}),

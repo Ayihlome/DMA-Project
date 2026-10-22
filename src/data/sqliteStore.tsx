@@ -255,8 +255,9 @@ export function SqliteStoreProvider({
       // The portion is in the product's meta and the rescaled recipes are recipe rows; persistChange writes both
       setPortion: (productId, portion) => change((s) => A.setPortion(s, productId, portion)),
       setStockCounts: (counts) => {
-        const next = A.setStockCounts(cur(), counts)
-        save(next, 'setStockCounts', () => useCases.setStockCounts({ counts, at: next.lastCountAt }))
+        const at = Date.now()
+        const next = A.setStockCounts(cur(), counts, at)
+        save(next, 'setStockCounts', () => useCases.setStockCounts({ counts, at }))
       },
       upsertSupplierPrice: (input) => change((s) => A.upsertSupplierPrice(s, input)),
 

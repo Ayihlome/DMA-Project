@@ -37,6 +37,7 @@
     "lastCountAt?",
     "lastSyncedAt",
     "onboardedAt?",
+    "partialCountAt?",
     "preferred",
     "prices",
     "products",

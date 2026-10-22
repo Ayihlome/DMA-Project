@@ -12,8 +12,10 @@ import { parseMeta } from "./productSql";
  * A count never goes below 0. Products not in `counts` are left alone.
  *
  * Only a full count (every product with a shelf count) saves the time of the count, which the
- * next count checks the recipes against (see src/data/recipeCheck.ts). "Sold without a recipe"
- * flags are not touched here; saveMenuItem clears one when that item gets a recipe.
+ * next count checks the recipes against (see src/data/recipeCheck.ts). A partial count saves
+ * its time as partialCountAt instead, which holds recipe suggestions back until a full count.
+ * "Sold without a recipe" flags are not touched here; saveMenuItem clears one when that item
+ * gets a recipe.
  * Same rule as setStockCounts in src/data/actions.ts.
  */
 export function createSetStockCountsUseCase({
@@ -71,11 +73,14 @@ export function createSetStockCountsUseCase({
           const n = counts[p.id];
           return n !== null && n !== "" && Number.isFinite(Number(n));
         });
-      if (full && deviceSettingsRepository) {
-        await deviceSettingsRepository.setJSON(
-          SETTINGS_KEYS.lastCountAt,
-          Number.isFinite(input.at) ? input.at : Date.now(),
-        );
+      if (deviceSettingsRepository) {
+        const at = Number.isFinite(input.at) ? input.at : Date.now();
+        if (full) {
+          await deviceSettingsRepository.setJSON(SETTINGS_KEYS.lastCountAt, at);
+          await deviceSettingsRepository.setJSON(SETTINGS_KEYS.partialCountAt, null);
+        } else if (updated.length) {
+          await deviceSettingsRepository.setJSON(SETTINGS_KEYS.partialCountAt, at);
+        }
       }
 
       return { success: true, updated, skipped };

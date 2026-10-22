@@ -654,14 +654,18 @@ export const isFullCount = (s: AppState, counts: StockCounts) =>
  *
  * "Sold without a recipe" flags are left alone: they clear when that item gets
  * a recipe (buildMenuItem). The count date moves only on a full count, because
- * recipe suggestions compare every ingredient against what was sold since then.
+ * recipe suggestions compare every ingredient against what was sold since then;
+ * a partial count is noted instead, which holds suggestions back until the next
+ * full count (see recipeSuggestions).
  */
 export function setStockCounts(s: AppState, counts: StockCounts, now = Date.now()): AppState {
+  const full = isFullCount(s, counts)
+  const counted = Object.keys(counts).length > 0
   return queued(
     {
       ...s,
       products: withCounts(s.products, counts),
-      ...(isFullCount(s, counts) ? { lastCountAt: now } : {}),
+      ...(full ? { lastCountAt: now, partialCountAt: undefined } : counted ? { partialCountAt: now } : {}),
     },
     'stock',
     'update',

@@ -60,6 +60,11 @@ function roundQty(p: Product, n: number) {
  */
 export function recipeSuggestions(s: AppState, counts: Record<string, number>): RecipeSuggestion[] {
   const since = countBaseline(s)
+  // A partial count since the last full one reset some items' stock without
+  // moving `since`, so a shortfall would be spread over sales from before it and
+  // suggest too small a change. Held back, for every item, until a full count
+  // has been saved; per-item count dates (Stage 6) will lift this.
+  if (s.partialCountAt !== undefined && s.partialCountAt > since) return []
   const used = new Map<string, number>()
   const servings = new Map<string, number>()
 
