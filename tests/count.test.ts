@@ -5,7 +5,7 @@
 import { describe, expect, it } from 'vitest'
 import { buildMenuItem, isFullCount, recordSale, setStockCounts } from '../src/data/actions'
 import type { AppState, Product } from '../src/data/types'
-import { stepFrom } from '../src/screens/Onboarding/countModel'
+import { confirmCount, stepFrom } from '../src/screens/Onboarding/countModel'
 
 const NOW = Date.UTC(2026, 9, 22, 10)
 
@@ -115,6 +115,13 @@ describe('the count screen stepper', () => {
     // A negative number can't be on a shelf, so it steps from 0
     expect(stepFrom(undefined, -3, 1)).toBe(1)
     expect(stepFrom(undefined, 0, -1)).toBe(0)
+  })
+
+  it('tapping the greyed number counts it as it is, in one tap', () => {
+    expect(confirmCount(12)).toBe(12)
+    expect(confirmCount(1.25)).toBe(1.25)
+    // The shelf can't hold a negative number, so an oversold item confirms as 0
+    expect(confirmCount(-3)).toBe(0)
   })
 
   it('steps from the counted number once touched', () => {

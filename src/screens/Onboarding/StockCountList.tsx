@@ -3,7 +3,7 @@ import { StyleSheet, Text, TextInput, View } from 'react-native'
 import MaterialIcon from '../../components/common/MaterialIcon'
 import PressableScale from '../../components/ui/PressableScale'
 import type { Product } from '../../data/types'
-import { stepFrom } from './countModel'
+import { confirmCount, stepFrom } from './countModel'
 import { colors, radius, space, tabular, TAP, type } from '../../theme/tokens'
 
 /** Counted quantity by product id. A product that isn't in it hasn't been counted. */
@@ -18,7 +18,8 @@ export type Counts = Record<string, number>
  * arrives, or type it when you already know.
  *
  * A row counts only once the owner touches it. Until then it shows what the app
- * thinks is there, greyed, and − and + start from that number; a row left alone
+ * thinks is there, greyed: tapping that number confirms it as counted, and − and
+ * + start from it. A row left alone
  * is not saved, so an item nobody looked at never becomes a counted number. Zero
  * is a legitimate answer — the point is that the owner said so.
  */
@@ -111,6 +112,13 @@ function CountRow({
             const n = parse(t)
             // A half-typed field means zero until it says otherwise
             onChange(Number.isFinite(n) ? Math.max(0, n) : 0)
+          }}
+          // Tapping the greyed number confirms it in one tap; the text is selected, so typing replaces it
+          onFocus={() => {
+            if (counted !== undefined) return
+            const n = confirmCount(product.stock)
+            setText(show(n))
+            onChange(n)
           }}
           onBlur={() => setText(counted === undefined ? '' : show(counted))}
           placeholder={show(shown)}
