@@ -97,3 +97,27 @@ export function profitReport(s: AppState, now = Date.now(), days = 7): ProfitRep
     items,
   }
 }
+
+export type WeekProfit = {
+  /** What was kept on the items with a known cost. */
+  kept: number
+  /** Share of the week's takings (0–1) that `kept` covers. */
+  covered: number
+  /** Items sold this week whose cost is not known yet. */
+  missing: number
+}
+
+/**
+ * The profit line on Home: the last 7 days, or null while nothing sold has a
+ * known cost, so a shop that hasn't recorded what it pays sees no number at all
+ * rather than one that looks complete.
+ */
+export function weekProfit(s: AppState, now = Date.now()): WeekProfit | null {
+  const report = profitReport(s, now, 7)
+  if (!(report.covered > 0)) return null
+  return {
+    kept: report.kept,
+    covered: report.covered,
+    missing: report.items.filter((r) => r.sold > 0 && !hasCost(r.product)).length,
+  }
+}

@@ -5,6 +5,7 @@ import { dashboardKpis, healthOf, stockItems, stockUncounted, type Health } from
 import type { AppState } from '../../data/types'
 import { money } from '../../theme/tokens'
 import { shortName } from '../Sell/sellModel'
+import { weekProfit } from '../Profit/profitModel'
 
 /** Worst first: what's already gone, then what's about to go. */
 const SEVERITY: Record<Health, number> = { out: 0, critical: 1, low: 2, setup: 3, healthy: 4 }
@@ -62,3 +63,17 @@ export function compare(today: number, yesterday: number): string | null {
 
 export const salesLine = (count: number) =>
   count === 0 ? 'No sales yet today' : `${count} sale${count === 1 ? '' : 's'} so far`
+
+/**
+ * Home's profit row, or null while nothing sold this week has a known cost.
+ * The share is rounded down and the items with no cost are named, so it never
+ * reads as more complete than it is.
+ */
+export function profitRow(s: AppState, now = Date.now()): { title: string; detail: string } | null {
+  const w = weekProfit(s, now)
+  if (!w) return null
+  const title = w.kept < 0 ? `Lost ${money(-w.kept)} this week` : `Kept ${money(w.kept)} this week`
+  if (w.covered >= 0.995) return { title, detail: 'Every sale this week has a cost' }
+  const missing = w.missing ? ` · ${w.missing} item${w.missing === 1 ? '' : 's'} with no cost yet` : ''
+  return { title, detail: `Covers ${Math.floor(w.covered * 100)}% of takings${missing}` }
+}

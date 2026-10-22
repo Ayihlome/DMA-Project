@@ -8,7 +8,7 @@ import PrimaryButton from '../../components/ui/PrimaryButton'
 import RollingNumber from '../../components/ui/RollingNumber'
 import { useStore } from '../../store'
 import { colors, fonts, money, radius, space } from '../../theme/tokens'
-import { homeSummary, salesLine } from './homeModel'
+import { homeSummary, profitRow, salesLine } from './homeModel'
 import { commonBrands } from '../../data/starterPacks'
 
 /** Spec: header height 300. */
@@ -25,6 +25,8 @@ export default function HomeScreen() {
   const store = useStore()
   const summary = useMemo(() => homeSummary(store.state), [store.state])
   const menuCount = useMemo(() => store.state.products.filter((p) => p.composite && p.sellable).length, [store.state.products])
+  // Hidden until something sold this week has a known cost
+  const profit = useMemo(() => profitRow(store.state), [store.state])
 
   // Asked once, only of a shop with no Bread or Cold drink tile: real catalogues are the owner's
   const offer = store.state.sellGrid?.brandsOffer
@@ -124,6 +126,8 @@ export default function HomeScreen() {
         ) : (
           <ListRow title="Nothing running low" onPress={() => router.navigate('/restock')} />
         )}
+
+        {profit ? <ListRow title={profit.title} detail={profit.detail} onPress={() => router.push('/profit')} /> : null}
 
         <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
 
