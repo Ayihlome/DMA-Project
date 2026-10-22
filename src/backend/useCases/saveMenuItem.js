@@ -47,10 +47,13 @@ export async function saveMenuItem({
     }
     const lines = wanted.filter((l) => costs.has(l.productId));
 
-    // 2. Cost comes from ingredient costs
-    const cost = round2(
-      lines.reduce((s, l) => s + costs.get(l.productId) * l.qty, 0),
-    );
+    // 2. Cost comes from ingredient costs. 0 means unknown, so one unknown ingredient makes the
+    //    whole item unknown: a sum of only the known ones would overstate the profit.
+    //    Same rule as recipeCost in src/data/inventory.ts.
+    const cost =
+      lines.length && lines.every((l) => costs.get(l.productId) > 0)
+        ? round2(lines.reduce((s, l) => s + costs.get(l.productId) * l.qty, 0))
+        : 0;
 
     // 3. Create/update + replace the recipe + queue the sync rows, in ONE transaction.
     //    The product is queued before its recipe lines so Supabase sees it first.

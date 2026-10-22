@@ -19,7 +19,9 @@ function detailFor(p: Product) {
     return p.recipe?.length ? `${money(p.price)} · made to order` : `${money(p.price)} · no ingredients yet`
   }
   // An ingredient has no selling price, so R0,00 would be a lie; its cost is what matters
-  if (!p.sellable) return `Costs ${money(p.cost)} per ${p.unit}${p.untracked ? '' : ` · ${unitQty(p, p.stock)} left`}`
+  // A cost of 0 means nobody has said what it costs yet, not that it is free
+  const cost = p.cost > 0 ? `Costs ${money(p.cost)} per ${p.unit}` : 'Cost not known yet'
+  if (!p.sellable) return `${cost}${p.untracked ? '' : ` · ${unitQty(p, p.stock)} left`}`
   if (p.untracked) return `${money(p.price)} · not counted`
   return `${money(p.price)} · ${p.stock < 0 ? `sold ${unitQty(p, -p.stock)} past zero` : `${unitQty(p, p.stock)} left`}`
 }

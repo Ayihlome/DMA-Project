@@ -5,7 +5,7 @@
  */
 import type { AppState, CategoryKey, Family, PaymentMethod, Portion, Product, Profile, Purchase, PurchaseLine, RecipeLine, SaleLine, SellGridSettings, SyncOp } from './types'
 import { QUICK_AMOUNT_ID } from './types'
-import { deductionsFor, productById } from './inventory'
+import { deductionsFor, productById, recipeCost } from './inventory'
 import { buildStarterCatalogue, type StarterSelection } from './starterPacks'
 import type { BackupStatus } from '../lib/cloudBackup'
 
@@ -292,15 +292,15 @@ export function averageCost(onHand: number, cost: number, qty: number, unitPrice
 
 /**
  * Made-to-order items cost what their ingredients cost, so when an ingredient's
- * price moves every item that uses it moves too. Returns the same array when
- * nothing changed.
+ * price moves every item that uses it moves too. Unknown (0) while any
+ * ingredient's cost is unknown. Returns the same array when nothing changed.
  */
 function recosted(products: Product[]): Product[] {
   const byId = new Map(products.map((p) => [p.id, p]))
   let changed = false
   const out = products.map((p) => {
     if (!p.composite || !p.recipe?.length) return p
-    const cost = Math.round(p.recipe.reduce((sum, l) => sum + (byId.get(l.productId)?.cost ?? 0) * l.qty, 0) * 100) / 100
+    const cost = recipeCost(p.recipe, (id) => byId.get(id)?.cost)
     if (cost === p.cost) return p
     changed = true
     return { ...p, cost }
@@ -695,9 +695,6 @@ export function migrateState(s: AppState, now = Date.now()): AppState {
   return out
 }
 
-const recipeCost = (s: AppState, recipe: RecipeLine[]) =>
-  Math.round(recipe.reduce((sum, l) => sum + (productById(s, l.productId)?.cost ?? 0) * l.qty, 0) * 100) / 100
-
 /**
  * Builds a made-to-order item, new or edited, without committing it — the
  * store commits it with a functional update so nothing in between is lost.
@@ -711,7 +708,7 @@ export function buildMenuItem(s: AppState, input: MenuItemInput, id?: string): P
     price: Math.max(0, input.price),
     menu: input.menu.trim() || 'Menu',
     recipe,
-    cost: recipeCost(s, recipe),
+    cost: recipeCost(recipe, (id) => productById(s, id)?.cost),
   }
   const existing = id ? productById(s, id) : undefined
   if (existing) return { ...existing, ...fields }

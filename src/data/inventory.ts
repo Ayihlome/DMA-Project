@@ -21,6 +21,22 @@ export function unitQty(p: Product, n: number) {
   return `${fmtQty(n)} ${n === 1 ? p.unit : p.unitPlural}`
 }
 
+/**
+ * What a recipe costs to make, from what its ingredients cost. A cost of 0 means
+ * unknown, so one unknown ingredient makes the whole recipe unknown (0): adding
+ * up only the known ones would look like a real cost and overstate the profit.
+ */
+export function recipeCost(recipe: { productId: string; qty: number }[], costOf: (productId: string) => number | undefined): number {
+  if (!recipe.length) return 0
+  let sum = 0
+  for (const l of recipe) {
+    const c = costOf(l.productId)
+    if (!(c !== undefined && c > 0)) return 0
+    sum += c * l.qty
+  }
+  return Math.round(sum * 100) / 100
+}
+
 /** BR1: deduction = sold quantity x quantity required, per recipe component. */
 export function deductionsFor(s: AppState, lines: { productId: string; qty: number }[]) {
   const out = new Map<string, number>()
