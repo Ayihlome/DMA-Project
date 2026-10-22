@@ -428,6 +428,7 @@ function toProduct(t: Template): Product {
     ...(t.priceOptions ? { priceOptions: t.priceOptions } : {}),
     ...(t.untracked ? { untracked: true } : {}),
     ...(t.portion ? { portion: t.portion } : {}),
+    template: t.id,
   }
 }
 
@@ -490,6 +491,9 @@ export function buildStarterCatalogue(sel: StarterSelection): Product[] {
       recipe: build.recipe,
       // Its own tile on Sell, named like everything else the owner makes
       menu: 'Kota',
+      template: build.id,
+      // The app's standard recipe until the owner saves it
+      recipeChecked: false,
     })
   }
 

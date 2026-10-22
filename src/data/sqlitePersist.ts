@@ -38,6 +38,8 @@ export function productMeta(p: Product) {
   if (p.priceOptions) meta.priceOptions = p.priceOptions
   if (p.untracked) meta.untracked = true
   if (p.portion) meta.portion = p.portion
+  if (p.template) meta.template = p.template
+  if (p.recipeChecked !== undefined) meta.recipeChecked = p.recipeChecked
   return meta
 }
 

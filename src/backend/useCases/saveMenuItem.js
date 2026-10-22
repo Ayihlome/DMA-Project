@@ -79,6 +79,8 @@ export async function saveMenuItem({
             sellable: true,
             composite: true,
             menu: menuName,
+            // Made by the owner: their own recipe (same rule as buildMenuItem in src/data/actions.ts)
+            ...(lines.length ? { recipeChecked: true } : {}),
           },
           now,
         );
@@ -88,6 +90,8 @@ export async function saveMenuItem({
           cost,
           menu: menuName,
           sellable: true,
+          // Saving a recipe is the owner checking it
+          ...(lines.length ? { recipeChecked: true } : {}),
         });
         await tx.execute(
           `update products set name = ?, selling_price = ?, category = 'hot', is_composite = 1,

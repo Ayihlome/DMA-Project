@@ -9,6 +9,7 @@ import type { Product } from '../../data/types'
 import { colors, fonts, money, space, type } from '../../theme/tokens'
 import { marginOf } from '../Profit/profitModel'
 import MenuItemSheet, { type MenuEdit } from './MenuItemSheet'
+import { recipeStatusLabel } from './menuModel'
 
 const SIDE = 28
 /** Made-to-order items saved before groups existed, or without one. */
@@ -19,7 +20,8 @@ function detailFor(p: Product) {
   const n = p.recipe?.length ?? 0
   if (n === 0) return `${money(p.price)} · no ingredients yet — nothing comes off stock`
   const margin = marginOf(p)
-  return `${money(p.price)} · ${margin ? `keep about ${money(margin.keep)} · ` : ''}${n} ingredient${n === 1 ? '' : 's'}`
+  const status = recipeStatusLabel(p)
+  return `${money(p.price)} · ${margin ? `keep about ${money(margin.keep)} · ` : ''}${n} ingredient${n === 1 ? '' : 's'}${status ? ` · ${status}` : ''}`
 }
 
 /**

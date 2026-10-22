@@ -67,6 +67,18 @@ export type Product = {
    * Shown to the owner in Count stock; cleared when the item is saved with a recipe.
    */
   soldWithoutRecipe?: number
+  /**
+   * The starter catalogue item this came from ("kota-special", "fries"). Ids
+   * differ per store (the SQLite store gives every product a uuid), so this is
+   * how setup answers given later, like the kitchen questions, find it.
+   */
+  template?: string
+  /**
+   * Recipe status, shown in Menu and never used in a calculation: false = the
+   * app's standard recipe, not checked by the owner yet; true = saved by the
+   * owner; absent = no status (made before this existed).
+   */
+  recipeChecked?: boolean
 }
 
 /**

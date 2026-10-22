@@ -11,6 +11,7 @@ import { fromPortions, makePortion, toPortions, type IngredientInput } from '../
 import type { Product, RecipeLine } from '../../data/types'
 import { colors, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { menuNames } from '../Sell/sellModel'
+import { recipeStatusLabel } from './menuModel'
 
 /** What the editor is opened for: a new item in a group, or an existing item. */
 export type MenuEdit = { group: string; product?: Product }
@@ -212,6 +213,9 @@ function Form({
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ingredients</Text>
+        {existing && recipeStatusLabel(existing) ? (
+          <Text style={styles.sectionHint}>{`${recipeStatusLabel(existing)}. Saving it marks it as yours.`}</Text>
+        ) : null}
         <Text style={styles.sectionHint}>
           {lines.length
             ? 'Taken off stock every time this sells. Amounts are for one.'

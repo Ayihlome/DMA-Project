@@ -736,8 +736,9 @@ export function buildMenuItem(s: AppState, input: MenuItemInput, id?: string): P
     menu: input.menu.trim() || 'Menu',
     recipe,
     cost: recipeCost(recipe, (id) => productById(s, id)?.cost),
-    // Having a recipe is what the "sold without a recipe" flag was asking for
-    ...(recipe.length ? { soldWithoutRecipe: 0 } : {}),
+    // Having a recipe is what the "sold without a recipe" flag was asking for, and
+    // saving one is the owner checking it (from Menu, or "Update recipe" after a count)
+    ...(recipe.length ? { soldWithoutRecipe: 0, recipeChecked: true } : {}),
   }
   const existing = id ? productById(s, id) : undefined
   if (existing) return { ...existing, ...fields }
