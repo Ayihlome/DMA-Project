@@ -6,7 +6,8 @@ const PAYMENTS = ["Cash", "Card", "EFT"];
 
 function checkOrder(order) {
   if (!order?.id) return "Order needs an id";
-  if (!order.supplierId) return `Order ${order.id} needs a supplier`;
+  // No supplier is allowed: "Stock came in" with none picked, or "Bought it" on an item with no
+  // price yet. Refusing it lost the stock, since the next reload put the old count back.
   if (!STATUSES.includes(order.status))
     return `Order ${order.id} has an unknown status`;
   if (order.payment != null && !PAYMENTS.includes(order.payment)) {
