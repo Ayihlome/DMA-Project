@@ -107,13 +107,13 @@ export default function MenuScreen() {
       <KitchenSheet
         visible={kitchenOpen}
         onClose={() => setKitchenOpen(false)}
-        onSaved={() => setToast({ message: 'Standard recipes resized' })}
+        onSaved={() => setToast({ message: 'Standard recipes resized', tone: 'success' })}
       />
 
       <MenuItemSheet
         edit={edit}
         onSaved={(product, group) =>
-          setToast({ message: product ? `${product.name} saved to ${group}` : `Removed from ${group}` })
+          setToast({ message: product ? `${product.name} saved to ${group}` : `Removed from ${group}`, tone: 'success' })
         }
         onClose={() => setEdit(null)}
       />

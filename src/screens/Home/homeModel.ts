@@ -17,7 +17,9 @@ export type HomeSummary = {
   /** Nothing counted yet: low-stock warnings would all be noise. */
   uncounted: boolean
   lowCount: number
-  /** "Coke can, Albany bread, Polony…" */
+  /** Out, or gone within a day. The rest of `lowCount` is medium. */
+  criticalCount: number
+  /** "2 critical · 3 medium · Coke can, Albany bread, Polony…" */
   lowNames: string
   /**
    * Items Count stock will put under "Check these first": sold past zero, or
@@ -37,6 +39,9 @@ export function homeSummary(s: AppState, now = Date.now()): HomeSummary {
   const k = dashboardKpis(s, now)
   const low = [...k.attention].sort((a, b) => SEVERITY[healthOf(s, a, now)] - SEVERITY[healthOf(s, b, now)])
   const names = low.slice(0, NAMED).map((p) => shortName(p, p.price))
+  const critical = k.critical.length
+  const medium = low.length - critical
+  const levels = [critical ? `${critical} critical` : '', medium ? `${medium} medium` : ''].filter(Boolean).join(' · ')
   const oversold = stockItems(s).filter((p) => p.stock < 0).length
   const unrecipied = s.products.filter((p) => p.composite && (p.soldWithoutRecipe ?? 0) > 0).length
 
@@ -45,7 +50,8 @@ export function homeSummary(s: AppState, now = Date.now()): HomeSummary {
     count: k.salesCount,
     uncounted: stockUncounted(s),
     lowCount: low.length,
-    lowNames: names.join(', ') + (low.length > NAMED ? '…' : ''),
+    criticalCount: critical,
+    lowNames: `${levels} · ${names.join(', ')}${low.length > NAMED ? '…' : ''}`,
     toCheck: oversold + unrecipied,
     vsYesterday: compare(k.salesToday, k.salesYesterday),
   }

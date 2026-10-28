@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { actions as A, createSeedState, type AppState, type StoreApi } from './core'
 import { fetchBackup, pushBackup, type BackupStatus } from './lib/cloudBackup'
+import { logger } from './backend/Logging/Logger'
 
 // Exported so a second store (src/data/sqliteStore.tsx) can feed the same useStore()
 export const StoreContext = createContext<StoreApi | null>(null)
@@ -135,6 +136,8 @@ export function StoreProvider({
     (lines, meta) => {
       const check = A.recordSale(ref.current!, lines, meta)
       if (check.ok) update((s) => A.recordSale(s, lines, meta).state ?? s)
+      if (check.ok) logger.info('recordSale', 'saved', { lines, meta, message: check.message })
+      else logger.warn('recordSale', 'refused', { lines, meta, message: check.message })
       return { ok: check.ok, message: check.message } as A.Result
     },
     [update],

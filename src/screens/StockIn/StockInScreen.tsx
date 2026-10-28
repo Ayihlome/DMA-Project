@@ -103,6 +103,7 @@ export default function StockInScreen() {
     }
     Haptics.notificationAsync(Haptics.NotificationFeedbackType.Success)
     setToast({
+      tone: 'success',
       message: `Stock added · ${chosen.length} item${chosen.length === 1 ? '' : 's'}${priced ? ` · ${priced} price${priced === 1 ? '' : 's'} updated` : ''}`,
       // Undo takes the stock back out. Prices stay updated: they were true either way
       action: { label: 'Undo', onPress: () => store.undoRestock(ids) },

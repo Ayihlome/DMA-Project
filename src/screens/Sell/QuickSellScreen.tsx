@@ -254,7 +254,7 @@ export default function QuickSellScreen() {
     const total = draftTotal(active)
     const result = store.recordSale(draftToSale(active), { payment, cashGiven })
     if (!result.ok) {
-      setToast({ message: result.message })
+      setToast({ message: result.message, tone: 'error' })
       Haptics.notificationAsync(Haptics.NotificationFeedbackType.Error)
       return
     }
@@ -272,6 +272,7 @@ export default function QuickSellScreen() {
     const change = payment === 'Cash' && cashGiven != null ? Math.round((cashGiven - total) * 100) / 100 : 0
     setToast({
       message: `Sale saved · ${money(total)} · ${payment}${change > 0 ? ` · change ${money(change)}` : ''}`,
+      tone: 'success',
       // The phone's share sheet: WhatsApp, SMS, whatever the customer uses
       action: canShare() ? { label: 'Share', onPress: () => void Share.share({ message: receipt }).catch(() => {}) } : undefined,
     })
@@ -481,7 +482,7 @@ export default function QuickSellScreen() {
         edit={menuEdit}
         onSaved={(product, group) => {
           reopenGroup.current = group
-          setToast({ message: product ? `${product.name} saved to ${group}` : `Removed from ${group}` })
+          setToast({ message: product ? `${product.name} saved to ${group}` : `Removed from ${group}`, tone: 'success' })
         }}
         onClose={() => {
           setMenuEdit(null)

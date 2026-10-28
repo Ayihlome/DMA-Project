@@ -17,7 +17,7 @@ import { useHints } from '../../lib/hints'
 import { paidPerUnit, unpricedLines } from '../StockIn/stockInModel'
 import { useStore } from '../../store'
 import { colors, DURATION, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
-import { groupBySupplier, packText, restockList, type RestockItem } from './restockModel'
+import { groupBySupplier, packText, restockList, URGENCY_LABEL, type RestockItem } from './restockModel'
 
 const SIDE = 28
 
@@ -111,6 +111,7 @@ export default function RestockScreen() {
     // A mis-tap here would add a whole trip of stock, so the toast carries Undo
     setToast({
       message: `Stock updated · ${ticked.length} item${ticked.length === 1 ? '' : 's'}`,
+      tone: 'success',
       action: {
         label: 'Undo',
         onPress: () => {
@@ -254,7 +255,7 @@ function RestockRow({
           onPress={onToggle}
           accessibilityRole="checkbox"
           accessibilityState={{ checked }}
-          accessibilityLabel={`${p.name}, ${amount}`}
+          accessibilityLabel={`${p.name}, ${URGENCY_LABEL[item.urgency]}, ${amount}`}
           style={styles.toggleArea}
           hitSlop={{ top: 8, bottom: 8 }}
         >
@@ -263,9 +264,14 @@ function RestockRow({
               <MaterialIcon name="check" size={16} color={colors.ink} />
             </Animated.View>
           </Animated.View>
-          <Animated.Text style={[styles.name, !checked && styles.nameOff]} numberOfLines={2}>
-            {p.name}
-          </Animated.Text>
+          <View style={styles.nameCol}>
+            <Animated.Text style={[styles.name, !checked && styles.nameOff]} numberOfLines={2}>
+              {p.name}
+            </Animated.Text>
+            <View style={[styles.badge, BADGE[item.urgency]]}>
+              <Text style={[styles.badgeText, BADGE_TEXT[item.urgency]]}>{URGENCY_LABEL[item.urgency]}</Text>
+            </View>
+          </View>
         </Pressable>
 
         <PressableScale
@@ -423,12 +429,16 @@ const styles = StyleSheet.create({
     transitionTimingFunction: 'ease-out',
   },
   tickOn: { opacity: 1, transform: [{ scale: 1 }] },
+  nameCol: { flex: 1, alignItems: 'flex-start', gap: 4 },
+  // Word and colour both say it, so it reads without colour too
+  badge: { paddingHorizontal: space.sm, paddingVertical: 2, borderRadius: radius.pill },
+  badgeText: { ...type.badge, fontFamily: fonts.bold },
   name: {
     fontFamily: fonts.bold,
     fontSize: 17,
     lineHeight: 22,
     color: colors.ink,
-    flex: 1,
+    alignSelf: 'stretch',
     transitionProperty: 'color',
     transitionDuration: `${DURATION.base}ms`,
     transitionTimingFunction: 'ease',
@@ -485,4 +495,16 @@ const styles = StyleSheet.create({
   summary: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   count: { fontFamily: fonts.semibold, fontSize: 16, color: colors.quiet },
   total: { fontFamily: fonts.extrabold, fontSize: 24, lineHeight: 30, letterSpacing: -0.4, color: colors.ink },
+})
+
+const BADGE = StyleSheet.create({
+  critical: { backgroundColor: colors.dangerSoft },
+  medium: { backgroundColor: colors.warningSoft },
+  low: { backgroundColor: colors.field },
+})
+
+const BADGE_TEXT = StyleSheet.create({
+  critical: { color: colors.danger },
+  medium: { color: colors.warning },
+  low: { color: colors.quiet },
 })

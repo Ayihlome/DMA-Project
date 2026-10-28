@@ -9,6 +9,7 @@ import RollingNumber from '../../components/ui/RollingNumber'
 import { useStore } from '../../store'
 import { colors, fonts, money, radius, space } from '../../theme/tokens'
 import { homeSummary, profitRow, salesLine } from './homeModel'
+import { otherPromptFor } from './otherPrompt'
 import { commonBrands } from '../../data/starterPacks'
 import { nothingToSell, stockItems } from '../../data/inventory'
 import { useHints } from '../../lib/hints'
@@ -34,6 +35,8 @@ export default function HomeScreen() {
   // Prompt 2: food sold three times with no recipe, asked about once per item (never on Sell)
   const hints = useHints()
   const noRecipe = hints.ready ? recipePromptFor(store.state, hints.hints) : null
+  // Prompt 4: "Other" rung up often this week. One card at a time, so it waits behind the recipe one
+  const other = hints.ready && !noRecipe ? otherPromptFor(store.state, hints.hints) : null
   // Hidden until something sold this week has a known cost
   const profit = useMemo(() => profitRow(store.state), [store.state])
 
@@ -148,6 +151,36 @@ export default function HomeScreen() {
         </View>
       ) : null}
 
+      {other ? (
+        <View style={styles.offer} accessibilityRole="summary">
+          <Text style={styles.offerTitle}>{`You sold "Other" ${other.count} times this week`}</Text>
+          <Text style={styles.offerText}>
+            {`Most often for ${money(other.amount)}. Add what it was, and next time it comes off stock and counts in your profit.`}
+          </Text>
+          <View style={styles.offerRow}>
+            <PressableScale
+              onPress={() => hints.mark(other.key, 'dismissed')}
+              containerStyle={styles.flex}
+              style={styles.offerNo}
+              accessibilityLabel={`Not now, don't ask about "Other" again this week`}
+            >
+              <Text style={styles.offerBtnText}>Not now</Text>
+            </PressableScale>
+            <PressableScale
+              onPress={() => {
+                hints.mark(other.key, 'done')
+                router.push('/products/new')
+              }}
+              containerStyle={styles.flex}
+              style={styles.offerYes}
+              accessibilityLabel="Add a product"
+            >
+              <Text style={styles.offerBtnText}>Add a product</Text>
+            </PressableScale>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.rows}>
         {empty ? (
           <ListRow
@@ -164,7 +197,7 @@ export default function HomeScreen() {
           />
         ) : summary.lowCount > 0 ? (
           <ListRow
-            leading={<View style={styles.dot} />}
+            leading={<View style={[styles.dot, !summary.criticalCount && styles.dotMedium]} />}
             title={`${summary.lowCount} item${summary.lowCount === 1 ? '' : 's'} running low`}
             detail={summary.lowNames}
             onPress={() => router.navigate('/restock')}
@@ -228,4 +261,6 @@ const styles = StyleSheet.create({
   compare: { fontFamily: fonts.medium, fontSize: 14, color: 'rgba(17,17,17,0.7)', marginTop: 2 },
   rows: { marginTop: space.lg },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
+  // Amber when nothing is critical, so red keeps meaning "today"
+  dotMedium: { backgroundColor: colors.brand },
 })
