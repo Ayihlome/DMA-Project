@@ -1,0 +1,15 @@
+<?xml version="1.0" encoding="utf-8"?>
+<!--
+  The native Android splash is a plain brand-colour screen: AnimatedSplash draws
+  the logo itself, so a static logo here would flash before the stroke animation.
+
+  expo-splash-screen's Android plugin unconditionally points the theme's
+  windowSplashScreenAnimatedIcon at @drawable/splashscreen_logo, but only writes
+  that drawable when a splash `image` is configured. With no image the reference
+  dangles and the release build fails at resource linking. This transparent
+  layer-list is handed to the plugin as `android.drawable.icon` so the reference
+  resolves while the splash stays plain colour.
+-->
+<layer-list xmlns:android="http://schemas.android.com/apk/res/android">
+  <item android:drawable="@android:color/transparent" />
+</layer-list>
