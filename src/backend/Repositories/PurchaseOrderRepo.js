@@ -38,7 +38,7 @@ class PurchaseOrderRepository {
           [
             order.id,
             order.status,
-            order.supplierId,
+            order.supplierId || null,
             order.payment ?? "Cash",
             createdAt,
             createdAt,
@@ -54,7 +54,7 @@ class PurchaseOrderRepository {
               crypto.randomUUID(),
               order.id,
               line.productId,
-              order.supplierId,
+              order.supplierId || null,
               line.qty,
               line.unitPrice,
               receivedAt,

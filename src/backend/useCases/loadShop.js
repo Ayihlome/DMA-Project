@@ -127,6 +127,11 @@ export function createLoadShopUseCase({
           ...(m.size ? { size: m.size } : {}),
           ...(m.priceOptions ? { priceOptions: m.priceOptions } : {}),
           ...(m.untracked ? { untracked: true } : {}),
+          // How the kitchen measures it (see Product.portion); recipes stay in stock units
+          ...(m.portion ? { portion: m.portion } : {}),
+          // Setup's starter item, and the recipe status (see Product in src/data/types.ts)
+          ...(m.template ? { template: m.template } : {}),
+          ...(typeof m.recipeChecked === "boolean" ? { recipeChecked: m.recipeChecked } : {}),
           ...(row.sold_without_recipe > 0
             ? { soldWithoutRecipe: Number(row.sold_without_recipe) }
             : {}),
@@ -189,6 +194,13 @@ export function createLoadShopUseCase({
         (products.length ? Date.now() : null),
       ...(settings.restockDay != null
         ? { restockDay: json(settings.restockDay, undefined) }
+        : {}),
+      ...(settings.lastCountAt != null
+        ? { lastCountAt: json(settings.lastCountAt, undefined) }
+        : {}),
+      // Cleared to null by a full count
+      ...(Number.isFinite(json(settings.partialCountAt, null))
+        ? { partialCountAt: json(settings.partialCountAt, null) }
         : {}),
       ...(settings.sellGrid
         ? { sellGrid: json(settings.sellGrid, undefined) }

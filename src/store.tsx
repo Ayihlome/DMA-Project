@@ -3,6 +3,7 @@ import AsyncStorage from '@react-native-async-storage/async-storage'
 import NetInfo from '@react-native-community/netinfo'
 import { actions as A, createSeedState, type AppState, type StoreApi } from './core'
 import { fetchBackup, pushBackup, type BackupStatus } from './lib/cloudBackup'
+import { logger } from './backend/Logging/Logger'
 
 // Exported so a second store (src/data/sqliteStore.tsx) can feed the same useStore()
 export const StoreContext = createContext<StoreApi | null>(null)
@@ -65,7 +66,10 @@ export function StoreProvider({
       const [saved, savedPhotos, savedOwner] = await Promise.all([
         load<unknown>(A.STATE_KEY),
         load<Record<string, string>>(A.PHOTO_KEY),
-        load<string>(A.OWNER_KEY),
+        // Stored as the bare id (see setItem below), not JSON. Reading it through load()
+        // made JSON.parse throw, so it always came back null and every account counted as
+        // the owner: a second person signing in on this device got the first one's shop.
+        AsyncStorage.getItem(A.OWNER_KEY).catch(() => null),
       ])
       if (!alive) return
 
@@ -132,6 +136,8 @@ export function StoreProvider({
     (lines, meta) => {
       const check = A.recordSale(ref.current!, lines, meta)
       if (check.ok) update((s) => A.recordSale(s, lines, meta).state ?? s)
+      if (check.ok) logger.info('recordSale', 'saved', { lines, meta, message: check.message })
+      else logger.warn('recordSale', 'refused', { lines, meta, message: check.message })
       return { ok: check.ok, message: check.message } as A.Result
     },
     [update],
@@ -198,6 +204,7 @@ export function StoreProvider({
           return created.map((po) => po.id)
         },
         undoRestock: (ids) => update((s) => A.undoRestock(s, ids)),
+        recordPaid: (ids, paid) => update((s) => A.recordPaid(s, ids, paid)),
         setRestockDay: (day) => update((s) => A.setRestockDay(s, day)),
         voidSale: (saleId) => update((s) => A.voidSale(s, saleId)),
         cancelPurchase: (id) => update((s) => A.cancelPurchase(s, id)),
@@ -209,6 +216,8 @@ export function StoreProvider({
         skipOnboarding: (profile) => update((s) => A.skipOnboarding(s, profile)),
         setStockCounts: (counts) => update((s) => A.setStockCounts(s, counts)),
         updateSellGrid: (patch) => update((s) => A.updateSellGrid(s, patch)),
+        setPortion: (productId, portion) => update((s) => A.setPortion(s, productId, portion)),
+        applyKitchen: (kitchen) => update((s) => A.applyKitchen(s, kitchen)),
         // Same pattern as addProduct: build once (so the caller gets the exact
         // product back), then commit with a functional update so two calls in
         // one tap can't overwrite each other

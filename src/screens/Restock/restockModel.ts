@@ -1,25 +1,30 @@
 /**
  * The shopping list, worked out from the shop state with no React in it.
  */
-import { dailyUsage, pricesFor, stockItems, stockUncounted, supplierName, unitQty } from '../../data/inventory'
+import { dailyUsage, healthOf, pricesFor, stockItems, stockUncounted, supplierName, unitQty, type Health } from '../../data/inventory'
 import type { AppState, Product } from '../../data/types'
 
 /**
- * When the shop restocks: weekly, on the day set in Profile (Thursday until the
- * owner picks one). 0 = Sunday … 6 = Saturday.
+ * How soon an item on the list runs out. Critical: out, or gone within a day.
+ * Medium: gone within a few days. Low: lasts a few days but not the whole week.
  */
-export const RESTOCK_DAY = 4
-export const RESTOCK_EVERY_DAYS = 7
-export const DAY_NAMES = ['Sunday', 'Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday']
+export type Urgency = 'critical' | 'medium' | 'low'
 
-/** The shop's shopping day. */
-export const restockDayOf = (s: AppState) => s.restockDay ?? RESTOCK_DAY
-export const restockDayName = (s: AppState) => DAY_NAMES[restockDayOf(s)]
+export const URGENCY_LABEL: Record<Urgency, string> = { critical: 'Critical', medium: 'Medium', low: 'Low' }
 
-/** Days from today to the next shopping day. Today counts as the shopping day. */
-export function daysToShopping(now = Date.now(), day = RESTOCK_DAY) {
-  return (day - new Date(now).getDay() + 7) % 7
+const RANK: Record<Urgency, number> = { critical: 0, medium: 1, low: 2 }
+
+export function urgencyOf(h: Health): Urgency {
+  if (h === 'out' || h === 'critical') return 'critical'
+  if (h === 'low') return 'medium'
+  return 'low'
 }
+
+/**
+ * How many days the list buys for: the next week, whatever day it is. There is
+ * no shopping day to set (a shop's restockDay from before is ignored).
+ */
+export const LIST_COVERS_DAYS = 7
 
 export type RestockItem = {
   product: Product
@@ -32,17 +37,15 @@ export type RestockItem = {
   supplier: string
   /** Muted reason line: "Out now · sells 9 a day". */
   reason: string
+  urgency: Urgency
 }
 
 export type RestockGroup = { supplierId: string; supplier: string; items: RestockItem[] }
 
 /**
- * What to buy on the next shopping day.
+ * What to buy so the shop lasts the next week.
  *
- * Spec: suggested = (average daily sales × days until next restock) − stock,
- * rounded up to whole packs. "Days until next restock" is counted from today to
- * the trip *after* this one — what's bought on Thursday has to last until the
- * Thursday after, and today's stock is being sold until then too.
+ * Suggested = (average daily sales × 7 days) − stock, rounded up to whole packs.
  *
  * One guard the formula doesn't have: anything at or below zero gets at least a
  * pack. An item that's out sells nothing, its average drops to nothing, and the
@@ -51,7 +54,7 @@ export type RestockGroup = { supplierId: string; supplier: string; items: Restoc
 export function restockList(s: AppState, now = Date.now()): RestockItem[] {
   // Nothing counted yet: every item reads as empty, and the list would be noise
   if (stockUncounted(s)) return []
-  const horizon = daysToShopping(now, restockDayOf(s)) + RESTOCK_EVERY_DAYS
+  const horizon = LIST_COVERS_DAYS
 
   const out: RestockItem[] = []
   for (const p of stockItems(s)) {
@@ -69,6 +72,7 @@ export function restockList(s: AppState, now = Date.now()): RestockItem[] {
       supplierId: cheapest?.supplierId ?? '',
       supplier: cheapest ? supplierName(s, cheapest.supplierId) : '',
       reason: reasonFor(p, usage),
+      urgency: urgencyOf(healthOf(s, p, now)),
     })
   }
   return out
@@ -86,7 +90,8 @@ function reasonFor(p: Product, usage: number) {
 
 /**
  * Grouped by where it's cheapest, suppliers A–Z, with "no price yet" last —
- * those still need buying, they just haven't got a place yet.
+ * those still need buying, they just haven't got a place yet. Within a group,
+ * most urgent first, then A–Z.
  */
 export function groupBySupplier(items: RestockItem[]): RestockGroup[] {
   const map = new Map<string, RestockGroup>()
@@ -96,7 +101,7 @@ export function groupBySupplier(items: RestockItem[]): RestockGroup[] {
     map.set(it.supplierId, g)
   }
   return [...map.values()]
-    .map((g) => ({ ...g, items: g.items.sort((a, b) => a.product.name.localeCompare(b.product.name)) }))
+    .map((g) => ({ ...g, items: g.items.sort((a, b) => RANK[a.urgency] - RANK[b.urgency] || a.product.name.localeCompare(b.product.name)) }))
     .sort((a, b) => Number(!a.supplierId) - Number(!b.supplierId) || a.supplier.localeCompare(b.supplier))
 }
 
@@ -110,7 +115,3 @@ export function packText(p: Product, n: number) {
   if (n === 1) return `1 ${word}`
   return `${n} ${/(s|x|ch|sh)$/.test(word) ? `${word}es` : `${word}s`}`
 }
-
-/** Cost of buying `packs` of an item. */
-export const lineCost = (it: RestockItem, packs: number) =>
-  Math.round(packs * it.product.packSize * it.unitPrice * 100) / 100

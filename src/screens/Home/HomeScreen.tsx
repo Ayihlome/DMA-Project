@@ -8,7 +8,12 @@ import PrimaryButton from '../../components/ui/PrimaryButton'
 import RollingNumber from '../../components/ui/RollingNumber'
 import { useStore } from '../../store'
 import { colors, fonts, money, radius, space } from '../../theme/tokens'
-import { homeSummary, salesLine } from './homeModel'
+import { homeSummary, profitRow, salesLine } from './homeModel'
+import { otherPromptFor } from './otherPrompt'
+import { commonBrands } from '../../data/starterPacks'
+import { nothingToSell, stockItems } from '../../data/inventory'
+import { useHints } from '../../lib/hints'
+import { recipePromptFor } from '../Menu/menuModel'
 
 /** Spec: header height 300. */
 const HEADER = 300
@@ -23,6 +28,31 @@ const HEADER = 300
 export default function HomeScreen() {
   const store = useStore()
   const summary = useMemo(() => homeSummary(store.state), [store.state])
+  const menuCount = useMemo(() => store.state.products.filter((p) => p.composite && p.sellable).length, [store.state.products])
+  // A shop that skipped setup: point it at adding products, and hide what needs stock to mean anything
+  const empty = nothingToSell(store.state)
+  const hasStock = stockItems(store.state).length > 0
+  // Prompt 2: food sold three times with no recipe, asked about once per item (never on Sell)
+  const hints = useHints()
+  const noRecipe = hints.ready ? recipePromptFor(store.state, hints.hints) : null
+  // Prompt 4: "Other" rung up often this week. One card at a time, so it waits behind the recipe one
+  const other = hints.ready && !noRecipe ? otherPromptFor(store.state, hints.hints) : null
+  // Hidden until something sold this week has a known cost
+  const profit = useMemo(() => profitRow(store.state), [store.state])
+
+  // Asked once, only of a shop with no Bread or Cold drink tile: real catalogues are the owner's
+  const offer = store.state.sellGrid?.brandsOffer
+  const brands = useMemo(
+    () =>
+      offer || store.state.products.some((p) => p.family === 'bread' || p.family === 'colddrink')
+        ? []
+        : commonBrands(store.state.products),
+    [offer, store.state.products],
+  )
+  const addBrands = () => {
+    for (const input of brands) store.addProduct(input)
+    store.updateSellGrid({ brandsOffer: 'added' })
+  }
   const initial = (store.state.profile.ownerName.trim()[0] ?? '?').toUpperCase()
 
   return (
@@ -63,16 +93,111 @@ export default function HomeScreen() {
     >
       <PrimaryButton label="New sale" height={64} onPress={() => router.navigate('/sales')} />
 
+      {brands.length ? (
+        <View style={styles.offer} accessibilityRole="summary">
+          <Text style={styles.offerTitle}>Add common brands?</Text>
+          <Text style={styles.offerText}>
+            White and brown bread, Coke and Fanta, each with its own Bread or Cold drink tile on Sell. Prices are rough;
+            change them after.
+          </Text>
+          <View style={styles.offerRow}>
+            <PressableScale
+              onPress={() => store.updateSellGrid({ brandsOffer: 'dismissed' })}
+              containerStyle={styles.flex}
+              style={styles.offerNo}
+              accessibilityLabel="No thanks, don't add common brands"
+            >
+              <Text style={styles.offerBtnText}>No thanks</Text>
+            </PressableScale>
+            <PressableScale
+              onPress={addBrands}
+              containerStyle={styles.flex}
+              style={styles.offerYes}
+              accessibilityLabel={`Add ${brands.length} common brands`}
+            >
+              <Text style={styles.offerBtnText}>{`Add ${brands.length}`}</Text>
+            </PressableScale>
+          </View>
+        </View>
+      ) : null}
+
+      {noRecipe ? (
+        <View style={styles.offer} accessibilityRole="summary">
+          <Text style={styles.offerTitle}>{`${noRecipe.name} has no recipe yet`}</Text>
+          <Text style={styles.offerText}>
+            {`Sold ${noRecipe.soldWithoutRecipe} times, and none of its ingredients came off stock. Add what goes into one, and every sale takes them off by itself.`}
+          </Text>
+          <View style={styles.offerRow}>
+            <PressableScale
+              onPress={() => hints.mark(`recipe:${noRecipe.id}`, 'dismissed')}
+              containerStyle={styles.flex}
+              style={styles.offerNo}
+              accessibilityLabel={`Not now, don't ask about ${noRecipe.name}'s recipe again`}
+            >
+              <Text style={styles.offerBtnText}>Not now</Text>
+            </PressableScale>
+            <PressableScale
+              onPress={() => {
+                hints.mark(`recipe:${noRecipe.id}`, 'done')
+                router.push({ pathname: '/menu', params: { edit: noRecipe.id } })
+              }}
+              containerStyle={styles.flex}
+              style={styles.offerYes}
+              accessibilityLabel={`Add ingredients to ${noRecipe.name}`}
+            >
+              <Text style={styles.offerBtnText}>Add ingredients</Text>
+            </PressableScale>
+          </View>
+        </View>
+      ) : null}
+
+      {other ? (
+        <View style={styles.offer} accessibilityRole="summary">
+          <Text style={styles.offerTitle}>{`You sold "Other" ${other.count} times this week`}</Text>
+          <Text style={styles.offerText}>
+            {`Most often for ${money(other.amount)}. Add what it was, and next time it comes off stock and counts in your profit.`}
+          </Text>
+          <View style={styles.offerRow}>
+            <PressableScale
+              onPress={() => hints.mark(other.key, 'dismissed')}
+              containerStyle={styles.flex}
+              style={styles.offerNo}
+              accessibilityLabel={`Not now, don't ask about "Other" again this week`}
+            >
+              <Text style={styles.offerBtnText}>Not now</Text>
+            </PressableScale>
+            <PressableScale
+              onPress={() => {
+                hints.mark(other.key, 'done')
+                router.push('/products/new')
+              }}
+              containerStyle={styles.flex}
+              style={styles.offerYes}
+              accessibilityLabel="Add a product"
+            >
+              <Text style={styles.offerBtnText}>Add a product</Text>
+            </PressableScale>
+          </View>
+        </View>
+      ) : null}
+
       <View style={styles.rows}>
-        {summary.uncounted ? (
+        {empty ? (
+          <ListRow
+            leading={<View style={styles.dot} />}
+            title="Add what you sell"
+            detail="Your products, so they show on Sell"
+            onPress={() => router.push('/products')}
+          />
+        ) : !hasStock ? null : summary.uncounted ? (
           <ListRow
             title="Running low"
-            detail="Count your stock first to see this"
+            detail="Count the shelf first to see this"
             onPress={() => router.push('/count-stock')}
           />
         ) : summary.lowCount > 0 ? (
           <ListRow
-            leading={<View style={styles.dot} />}
+            leading={<View style={[styles.dot, !summary.criticalCount && styles.dotMedium]} />}
             title={`${summary.lowCount} item${summary.lowCount === 1 ? '' : 's'} running low`}
             detail={summary.lowNames}
             onPress={() => router.navigate('/restock')}
@@ -81,12 +206,24 @@ export default function HomeScreen() {
           <ListRow title="Nothing running low" onPress={() => router.navigate('/restock')} />
         )}
 
-        <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
+        {profit ? <ListRow title={profit.title} detail={profit.detail} onPress={() => router.push('/profit')} /> : null}
 
+        {hasStock ? (
+          <>
+            <ListRow title="Stock came in" detail="Add a delivery or a shopping trip" onPress={() => router.push('/stock-in')} />
+            <ListRow
+              title="Count the shelf"
+              detail={summary.toCheck > 0 ? `${summary.toCheck} to check first` : undefined}
+              onPress={() => router.push('/count-stock')}
+            />
+          </>
+        ) : null}
+
+        {/* Recipes are what take ingredients off stock, so changing them is a daily job, not a setting */}
         <ListRow
-          title="Count stock"
-          detail={summary.toCheck > 0 ? `${summary.toCheck} to check first` : undefined}
-          onPress={() => router.push('/count-stock')}
+          title="Menu"
+          detail={menuCount ? `${menuCount} item${menuCount === 1 ? '' : 's'} · prices and ingredients` : 'Add food you make'}
+          onPress={() => router.push('/menu')}
           last
         />
       </View>
@@ -95,6 +232,14 @@ export default function HomeScreen() {
 }
 
 const styles = StyleSheet.create({
+  flex: { flex: 1 },
+  offer: { gap: space.sm, padding: space.lg, borderRadius: 16, backgroundColor: colors.brandSoft, marginTop: space.lg },
+  offerTitle: { fontFamily: fonts.bold, fontSize: 16, color: colors.ink },
+  offerText: { fontFamily: fonts.medium, fontSize: 14, lineHeight: 19, color: colors.ink },
+  offerRow: { flexDirection: 'row', gap: space.sm, marginTop: space.xs },
+  offerNo: { height: 44, borderRadius: radius.md, backgroundColor: colors.surface, alignItems: 'center', justifyContent: 'center' },
+  offerYes: { height: 44, borderRadius: radius.md, backgroundColor: colors.brand, alignItems: 'center', justifyContent: 'center' },
+  offerBtnText: { fontFamily: fonts.bold, fontSize: 15, color: colors.ink },
   header: { flex: 1, paddingTop: space.lg, paddingBottom: 44, justifyContent: 'space-between' },
   topRow: { flexDirection: 'row', alignItems: 'center', justifyContent: 'space-between' },
   today: { fontFamily: fonts.bold, fontSize: 17, color: colors.ink },
@@ -116,4 +261,6 @@ const styles = StyleSheet.create({
   compare: { fontFamily: fonts.medium, fontSize: 14, color: 'rgba(17,17,17,0.7)', marginTop: 2 },
   rows: { marginTop: space.lg },
   dot: { width: 10, height: 10, borderRadius: 5, backgroundColor: colors.danger },
+  // Amber when nothing is critical, so red keeps meaning "today"
+  dotMedium: { backgroundColor: colors.brand },
 })

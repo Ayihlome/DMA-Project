@@ -15,10 +15,29 @@ export const productById = (s: AppState, id: string) => s.products.find((p) => p
 /** Things with a count on the shelf: not composites (derived) and not untracked (airtime). */
 export const stockItems = (s: AppState) => s.products.filter((p) => !p.composite && !p.untracked)
 
+/** No product to sell yet (a shop that skipped setup): Home says "Add what you sell". */
+export const nothingToSell = (s: AppState) => !s.products.some((p) => p.sellable)
+
 /** Quantity with unit, showing small kg amounts in grams ("50 g"). */
 export function unitQty(p: Product, n: number) {
   if (p.unit === 'kg' && n < 1) return `${Math.round(n * 1000)} g`
   return `${fmtQty(n)} ${n === 1 ? p.unit : p.unitPlural}`
+}
+
+/**
+ * What a recipe costs to make, from what its ingredients cost. A cost of 0 means
+ * unknown, so one unknown ingredient makes the whole recipe unknown (0): adding
+ * up only the known ones would look like a real cost and overstate the profit.
+ */
+export function recipeCost(recipe: { productId: string; qty: number }[], costOf: (productId: string) => number | undefined): number {
+  if (!recipe.length) return 0
+  let sum = 0
+  for (const l of recipe) {
+    const c = costOf(l.productId)
+    if (!(c !== undefined && c > 0)) return 0
+    sum += c * l.qty
+  }
+  return Math.round(sum * 100) / 100
 }
 
 /** BR1: deduction = sold quantity x quantity required, per recipe component. */

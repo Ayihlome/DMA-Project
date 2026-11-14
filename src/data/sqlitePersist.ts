@@ -37,6 +37,9 @@ export function productMeta(p: Product) {
   if (p.size) meta.size = p.size
   if (p.priceOptions) meta.priceOptions = p.priceOptions
   if (p.untracked) meta.untracked = true
+  if (p.portion) meta.portion = p.portion
+  if (p.template) meta.template = p.template
+  if (p.recipeChecked !== undefined) meta.recipeChecked = p.recipeChecked
   return meta
 }
 
@@ -177,15 +180,25 @@ export async function persistChange(uc: UseCases, prev: AppState, next: AppState
   return { errors, supplierIds }
 }
 
+/**
+ * Costs the screens worked out when an order came in or was undone (see averageCost in actions.ts).
+ * Only the product's meta is written: the stock itself moves through the order use cases, and
+ * writing it here too would count it twice.
+ */
+export async function persistCosts(uc: UseCases, prev: AppState, next: AppState) {
+  const errors: string[] = []
+  const before = new Map(prev.products.map((p) => [p.id, p]))
+  for (const p of next.products) {
+    const old = before.get(p.id)
+    if (!old || old.cost === p.cost) continue
+    errors.push(...failed(await uc.updateProduct({ productID: p.id, meta: productMeta(p) }), `updateProduct ${p.name}`))
+  }
+  return errors
+}
+
 async function writeRecipe(uc: UseCases, p: Product) {
   const components = (p.recipe ?? []).map((l) => ({ componentProductID: l.productId, quantityRequired: l.qty }))
   return failed(await uc.setRecipeComponents({ parentProductID: p.id, components, allowEmpty: true }), `setRecipeComponents ${p.name}`)
-}
-
-/** The demo shop offered by "Skip": its catalogue, suppliers and prices, but not twelve weeks of invented takings. */
-export function demoShop(seed: AppState): AppState {
-  const { products, prices, preferred } = uuidify(seed)
-  return { ...seed, products, prices, preferred, sales: [], purchases: [], queue: [] }
 }
 
 /** A shop with nothing in it, not yet onboarded. What a new account starts from. */

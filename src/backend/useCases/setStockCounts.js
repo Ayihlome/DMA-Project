@@ -1,17 +1,27 @@
+import { SETTINGS_KEYS } from "../Repositories/DeviceSettingsRepo";
+import { parseMeta } from "./productSql";
+
 /**
  * A stock count: sets the quantity on hand for the products the owner counted.
  *
- * Input:  { counts: { [productID]: number } }
+ * Input:  { counts: { [productID]: number }, at?: number }   // at: when the count was saved (ms)
  * Output (success): { success: true, updated: StockItem[], skipped: { productID, reason }[] }
  * Output (failure): { success: false, errors: string[] }
  *
  * Made-to-order (composite) products are skipped, their stock comes from their ingredients.
- * A count never goes below 0. Saving a count also clears every "sold without a recipe" flag,
- * because that is what puts the ingredient numbers right again.
+ * A count never goes below 0. Products not in `counts` are left alone.
+ *
+ * Only a full count (every product with a shelf count) saves the time of the count, which the
+ * next count checks the recipes against (see src/data/recipeCheck.ts). A partial count saves
+ * its time as partialCountAt instead, which holds recipe suggestions back until a full count.
+ * "Sold without a recipe" flags are not touched here; saveMenuItem clears one when that item
+ * gets a recipe.
+ * Same rule as setStockCounts in src/data/actions.ts.
  */
 export function createSetStockCountsUseCase({
   productRepository,
   stockRepository,
+  deviceSettingsRepository,
 }) {
   return async function setStockCounts(input) {
     const counts = input?.counts;
@@ -56,9 +66,20 @@ export function createSetStockCountsUseCase({
         );
       }
 
-      for (const product of products) {
-        if (product.sold_without_recipe > 0) {
-          await productRepository.setSoldWithoutRecipe(product.id, 0);
+      // A full count: every product with a shelf count, so no kotas and no airtime
+      const full = products
+        .filter((p) => !p.is_composite && !parseMeta(p.meta).untracked)
+        .every((p) => {
+          const n = counts[p.id];
+          return n !== null && n !== "" && Number.isFinite(Number(n));
+        });
+      if (deviceSettingsRepository) {
+        const at = Number.isFinite(input.at) ? input.at : Date.now();
+        if (full) {
+          await deviceSettingsRepository.setJSON(SETTINGS_KEYS.lastCountAt, at);
+          await deviceSettingsRepository.setJSON(SETTINGS_KEYS.partialCountAt, null);
+        } else if (updated.length) {
+          await deviceSettingsRepository.setJSON(SETTINGS_KEYS.partialCountAt, at);
         }
       }
 

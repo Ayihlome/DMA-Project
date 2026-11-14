@@ -317,6 +317,19 @@ export async function runMigration() {
     );`,
   );
 
+  await db.execute(`
+    create table if not exists supplier_product_map (
+      id text primary key,
+      supplier_id text not null references suppliers(id),
+      product_id text not null references products(id),
+      external_source text not null,
+      external_id text not null,
+      external_name text,
+      updated_at text not null,
+      unique(supplier_id, product_id)
+    );
+  `);
+
   const productColumns = await db.execute(`pragma table_info(products)`);
   if (!productColumns.rows.some((column) => column.name === "pack_size")) {
     await db.execute(
@@ -326,6 +339,7 @@ export async function runMigration() {
 
   await migrateSupplierTables();
   await migrateV2Columns();
+  await migrateSupplierSourceColumns();
 
   // Small key/value store for things that belong to this phone (which account owns the data,
   // the restock budget, ...). These are never sent to Supabase.
@@ -470,6 +484,20 @@ async function addColumnIfMissing(table, column, ddl) {
   if (!rows.some((c) => c.name === column)) {
     await db.execute(`alter table ${table} add column ${column} ${ddl}`);
   }
+}
+
+// Phase 1 of supplier profiles: where a supplier's prices come from and how
+// fresh they are. Optional columns, so manual suppliers keep working untouched.
+async function migrateSupplierSourceColumns() {
+  await addColumnIfMissing(
+    "suppliers",
+    "source_type",
+    "text not null default 'manual'",
+  );
+  await addColumnIfMissing("suppliers", "source_url", "text");
+  await addColumnIfMissing("suppliers", "last_synced_at", "text");
+  await addColumnIfMissing("supplier_prices", "as_of", "text");
+  await addColumnIfMissing("supplier_prices", "source", "text");
 }
 
 // Columns the v2 screens need. Safe to re-run.
