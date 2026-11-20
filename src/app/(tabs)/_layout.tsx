@@ -13,9 +13,14 @@ export default function TabLayout() {
       tabBar={(props) => <TabBar {...props} />}
       screenOptions={{
         headerShown: false,
-        // Tabs are peers, not a hierarchy, so switching never slides
         animation: 'none',
       }}
-    />
+    >
+      <Tabs.Screen name="index" />
+      <Tabs.Screen name="sales" />
+      <Tabs.Screen name="supply" />
+      <Tabs.Screen name="restock" />
+      <Tabs.Screen name="profile" />
+    </Tabs>
   );
 }

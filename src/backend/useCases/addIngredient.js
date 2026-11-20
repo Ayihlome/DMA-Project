@@ -21,7 +21,8 @@ const nextIngredientId = () => {
  * A new stock item to use as an ingredient: counted and bought, never sold.
  * Stock starts at 0 (stock is counted, never guessed).
  *
- * Input:  { id?, name, unit, packSize?, packLabel?, cost?, unitPlural? }
+ * Input:  { id?, name, unit, packSize?, packLabel?, cost?, unitPlural?, portion? }
+ *         portion: { name, plural, perUnit } — how the kitchen measures it (see Product.portion)
  *         pass `id` when the screen already shows the ingredient under that id
  * Output: { success: true, id, ...product } | { success: false, errors: string[] }
  */
@@ -33,6 +34,7 @@ export async function addIngredient({
   packLabel,
   cost,
   unitPlural,
+  portion,
 } = {}) {
   const cleanName = String(name ?? "").trim();
   const cleanUnit = String(unit ?? "").trim();
@@ -75,6 +77,7 @@ export async function addIngredient({
     price: 0,
     sellable: false,
     composite: false,
+    ...(portion && Number(portion.perUnit) > 0 ? { portion } : {}),
   };
 
   try {

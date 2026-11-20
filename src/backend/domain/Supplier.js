@@ -1,6 +1,22 @@
 class Suppliers {
-  constructor({ id, name, contact, location }) {
-    Object.assign(this, { id, name, contact, location });
+  constructor({
+    id,
+    name,
+    contact,
+    location,
+    sourceType,
+    sourceUrl,
+    lastSyncedAt,
+  }) {
+    Object.assign(this, {
+      id,
+      name,
+      contact,
+      location,
+      sourceType: sourceType ?? "manual",
+      sourceUrl: sourceUrl ?? null,
+      lastSyncedAt: lastSyncedAt ?? null,
+    });
   }
 }
 

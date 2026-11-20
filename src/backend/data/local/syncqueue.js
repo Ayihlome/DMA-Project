@@ -4,10 +4,15 @@ import { supabase } from "../../../lib/supabase";
 const MAX_TRIES = 5;
 // Postgres "unique_violation": Supabase already has this row, so the insert is as good as done.
 const DUPLICATE_KEY = "23505";
+// Postgres "foreign_key_violation": the parent row (e.g. the sale for a line item) isn't on the server yet.
+const MISSING_PARENT = "23503";
 // Postgres "undefined_table" / PostgREST "table not in schema cache"
 const MISSING_TABLE = ["42P01", "PGRST205"];
 // Tables written with an upsert, and the columns that identify a row on the server.
-const CONFLICT_COLUMNS = { supplier_prices: "supplier_id,product_id" };
+const CONFLICT_COLUMNS = {
+  supplier_prices: "supplier_id,product_id",
+  supplier_product_map: "supplier_id,product_id",
+};
 
 let running = false;
 
@@ -27,10 +32,10 @@ export async function enqueueSync(entityType, entityID, operation, payload) {
 }
 
 // A failed fetch (no signal) rather than an answer from the server.
-function isNetworkError(error) {
+export function isNetworkError(error) {
   return (
     !error?.code &&
-    /network request failed|failed to fetch|network error|timed? ?out|offline/i.test(
+    /network request failed|failed to fetch|fetch failed|network (error|connection)|connection (was )?lost|timed? ?out|offline/i.test(
       String(error?.message ?? error),
     )
   );
@@ -102,6 +107,9 @@ export async function processSyncQueue() {
 
       // No signal: stop here and try again later. This is not the row's fault.
       if (isNetworkError(error)) return;
+
+      // Parent not synced yet: leave the row pending without using a try; it goes once the parent does.
+      if (error?.code === MISSING_PARENT) continue;
 
       console.error(
         `Failed to sync ${item.entity_type} ${item.entity_id}:`,

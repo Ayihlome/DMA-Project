@@ -16,10 +16,12 @@ export type Toast = {
   message: string
   /** "Undo", "Share" — a single action, never two. */
   action?: { label: string; onPress: () => void }
+  /** Green when something worked (a sale, a delivery), red when it didn't. Black otherwise. */
+  tone?: 'success' | 'error'
 }
 
 /**
- * The black toast, optionally with one action. Only the button takes touches;
+ * The toast, optionally with one action. Only the button takes touches;
  * the rest lets taps through to the screen, so a toast never blocks the next
  * sale. Stays up longer when there's something to tap.
  *
@@ -48,7 +50,7 @@ export default function ActionToast({
       key={toast.message}
       entering={ENTER}
       exiting={EXIT}
-      style={[styles.toast, { bottom }]}
+      style={[styles.toast, toast.tone && TONE[toast.tone], { bottom }]}
       pointerEvents="box-none"
       accessibilityLiveRegion="polite"
     >
@@ -66,7 +68,8 @@ export default function ActionToast({
           hitSlop={10}
           style={({ pressed }) => [styles.action, pressed && styles.actionPressed]}
         >
-          <Text style={styles.actionText}>{toast.action.label}</Text>
+          {/* Yellow is hard to read on green or red, so a coloured toast's button is white */}
+          <Text style={[styles.actionText, toast.tone && styles.actionOnTone]}>{toast.action.label}</Text>
         </Pressable>
       ) : (
         <View />
@@ -93,4 +96,10 @@ const styles = StyleSheet.create({
   action: { paddingHorizontal: space.md, paddingVertical: 8, borderRadius: radius.sm },
   actionPressed: { backgroundColor: 'rgba(255,255,255,0.12)' },
   actionText: { fontFamily: fonts.bold, fontSize: 15, color: colors.brand },
+  actionOnTone: { color: colors.surface, textDecorationLine: 'underline' },
+})
+
+const TONE = StyleSheet.create({
+  success: { backgroundColor: colors.success },
+  error: { backgroundColor: colors.danger },
 })

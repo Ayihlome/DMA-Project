@@ -256,7 +256,8 @@ const styles = StyleSheet.create({
     position: 'absolute',
     left: SIDE,
     right: SIDE,
-    backgroundColor: colors.ink,
+    // Only ever says a price was saved, so it's the green success toast
+    backgroundColor: colors.success,
     borderRadius: radius.md,
     paddingVertical: space.md,
     paddingHorizontal: space.lg,

@@ -1,5 +1,5 @@
 import React, { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { Keyboard, StyleSheet, useWindowDimensions, View } from 'react-native'
+import { Keyboard, Platform, StyleSheet, useWindowDimensions, View } from 'react-native'
 import Animated, {
   cancelAnimation,
   Easing,
@@ -48,7 +48,7 @@ const SLIDE = {
  * they open on.
  */
 export default function AuthPager({ initial }: { initial: PagerSegment }) {
-  const { width } = useWindowDimensions()
+  const { width, height } = useWindowDimensions()
   const scroller = useAnimatedRef<Animated.ScrollView>()
 
   // Read once. Feeding a changing value back into contentOffset would make the
@@ -161,7 +161,8 @@ export default function AuthPager({ initial }: { initial: PagerSegment }) {
         {PAGES.map((p, i) => (
           <View
             key={p}
-            style={{ width }}
+            // On the web the page has no height of its own, so the form inside could never scroll
+            style={Platform.OS === 'web' ? { width, height } : { width }}
             // The page off to the side is still mounted, so hide it from
             // screen readers or they'd read both forms as one
             accessibilityElementsHidden={i !== page}

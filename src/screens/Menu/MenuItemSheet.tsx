@@ -7,9 +7,12 @@ import PressableScale from '../../components/ui/PressableScale'
 import PrimaryButton from '../../components/ui/PrimaryButton'
 import { useStore } from '../../store'
 import { stockItems } from '../../data/inventory'
+import { fromPortions, makePortion, toPortions, type IngredientInput } from '../../data/actions'
 import type { Product, RecipeLine } from '../../data/types'
 import { colors, fonts, money, radius, space, tabular, type } from '../../theme/tokens'
 import { menuNames } from '../Sell/sellModel'
+import { recipeStatusLabel } from './menuModel'
+import { formSummary } from '../Products/productFormModel'
 
 /** What the editor is opened for: a new item in a group, or an existing item. */
 export type MenuEdit = { group: string; product?: Product }
@@ -30,6 +33,31 @@ type Line = { productId: string; qty: string }
 const parse = (t: string) => {
   const n = Number(t.replace(',', '.'))
   return Number.isFinite(n) ? n : 0
+}
+
+/**
+ * How an ingredient is typed into a recipe: in the kitchen's own measure when it
+ * has one (10 chips, 3 slices), else grams for kilos, else the stock unit.
+ */
+function measureWord(p: Product, n: number) {
+  if (p.portion) return n === 1 ? p.portion.name : p.portion.plural
+  const small = SMALL[p.unit]
+  if (small) return small.unit
+  return n === 1 ? p.unit : p.unitPlural
+}
+
+/** A recipe amount (stock units) as the editor shows it. */
+function shown(p: Product, qty: number) {
+  if (p.portion) return String(Math.round(toPortions(p, qty) * 100) / 100)
+  const small = SMALL[p.unit]
+  return String(small ? Math.round(qty * small.factor) : qty)
+}
+
+/** What was typed, back in stock units. */
+function stockQty(p: Product, typed: number) {
+  if (p.portion) return fromPortions(p, typed)
+  const small = SMALL[p.unit]
+  return typed / (small ? small.factor : 1)
 }
 
 /**
@@ -81,8 +109,7 @@ function Form({
   const [lines, setLines] = useState<Line[]>(() =>
     (existing?.recipe ?? []).map((l) => {
       const p = store.state.products.find((x) => x.id === l.productId)
-      const small = p ? SMALL[p.unit] : undefined
-      return { productId: l.productId, qty: String(small ? Math.round(l.qty * small.factor) : l.qty) }
+      return { productId: l.productId, qty: p ? shown(p, l.qty) : String(l.qty) }
     }),
   )
   const [confirmRemove, setConfirmRemove] = useState(false)
@@ -95,8 +122,7 @@ function Form({
   const recipe: RecipeLine[] = lines
     .map((l) => {
       const p = byId.get(l.productId)
-      const small = p ? SMALL[p.unit] : undefined
-      return { productId: l.productId, qty: parse(l.qty) / (small ? small.factor : 1) }
+      return { productId: l.productId, qty: p ? stockQty(p, parse(l.qty)) : parse(l.qty) }
     })
     .filter((l) => l.qty > 0)
 
@@ -188,6 +214,9 @@ function Form({
 
       <View style={styles.section}>
         <Text style={styles.sectionTitle}>Ingredients</Text>
+        {existing && recipeStatusLabel(existing) ? (
+          <Text style={styles.sectionHint}>{`${recipeStatusLabel(existing)}. Saving it marks it as yours.`}</Text>
+        ) : null}
         <Text style={styles.sectionHint}>
           {lines.length
             ? 'Taken off stock every time this sells. Amounts are for one.'
@@ -197,7 +226,7 @@ function Form({
         {lines.map((l) => {
           const p = byId.get(l.productId)
           if (!p) return null
-          const small = SMALL[p.unit]
+          const measure = measureWord(p, parse(l.qty))
           return (
             <View key={l.productId} style={styles.line}>
               <Text style={styles.lineName} numberOfLines={1}>
@@ -211,10 +240,10 @@ function Form({
                   }
                   keyboardType="decimal-pad"
                   style={styles.qtyInput}
-                  accessibilityLabel={`Amount of ${p.name} in ${small ? small.unit : p.unitPlural}`}
+                  accessibilityLabel={`Amount of ${p.name} in ${measureWord(p, 2)}`}
                   selectTextOnFocus
                 />
-                <Text style={styles.qtyUnit}>{small ? small.unit : parse(l.qty) === 1 ? p.unit : p.unitPlural}</Text>
+                <Text style={styles.qtyUnit}>{measure}</Text>
               </View>
               <PressableScale
                 onPress={() => setLines((ls) => ls.filter((x) => x.productId !== l.productId))}
@@ -311,15 +340,22 @@ function NewIngredient({
 }: {
   initialName: string
   onBack: () => void
-  onCreate: (input: { name: string; unit: string; packSize: number; cost?: number }) => void
+  onCreate: (input: IngredientInput) => void
 }) {
   const [name, setName] = useState(initialName)
   const [unit, setUnit] = useState<(typeof NEW_UNITS)[number]>('piece')
   const [pack, setPack] = useState('')
   const [packPrice, setPackPrice] = useState('')
+  // How the kitchen measures it, when not in the unit it is counted in: potatoes → chips
+  const [servedAs, setServedAs] = useState('')
+  const [perUnit, setPerUnit] = useState('')
 
   const packSize = Math.max(1, parse(pack) || 1)
   const cost = parse(packPrice) > 0 ? parse(packPrice) / packSize : undefined
+  const unitWord = unit === 'piece' ? 'piece' : unit === 'slice' ? 'slice' : unit
+  const served = servedAs.trim().toLowerCase()
+  const portion = makePortion(servedAs, parse(perUnit)) ?? undefined
+  const summary = formSummary({ name, unit: unitWord, packSize, packCost: parse(packPrice) > 0 ? parse(packPrice) : undefined }, money)
 
   return (
     <ScrollView style={styles.scroll} contentContainerStyle={styles.body} keyboardShouldPersistTaps="handled">
@@ -327,7 +363,7 @@ function NewIngredient({
       <FilledInput label="Name, e.g. Burger patty" value={name} onChangeText={setName} autoCapitalize="words" />
 
       <View style={styles.section}>
-        <Text style={styles.sectionTitle}>Counted in</Text>
+        <Text style={styles.sectionTitle}>How do you count it?</Text>
         <View style={styles.chips}>
           {NEW_UNITS.map((u) => (
             <PressableScale
@@ -345,23 +381,52 @@ function NewIngredient({
       </View>
 
       <FilledInput
-        label={`How many ${unit === 'kg' || unit === 'L' ? unit : `${unit}s`} in what you buy`}
+        label={`How many ${unit === 'kg' || unit === 'L' ? unit : `${unit}s`} in what you buy?`}
         value={pack}
         onChangeText={setPack}
         keyboardType="decimal-pad"
+        hint="Put 1 if you buy them one at a time."
       />
       <FilledInput
-        label="What you pay for that (optional)"
+        label={`What do you pay for ${packSize > 1 ? `those ${packSize}` : `one ${unitWord}`}? (optional)`}
         value={packPrice}
         onChangeText={setPackPrice}
         keyboardType="decimal-pad"
         hint={cost ? `${money(cost)} per ${unit} — used to show what an item costs to make` : undefined}
       />
 
+      <View style={styles.section}>
+        <Text style={styles.sectionTitle}>In the kitchen (optional)</Text>
+        <Text style={styles.sectionHint}>
+          {`Only if you serve it in something other than ${unit === 'kg' || unit === 'L' ? unit : `${unitWord}s`}: potatoes as chips, a roll of polony as slices.`}
+        </Text>
+        <FilledInput label="Served as — chips, slices, spoons" value={servedAs} onChangeText={setServedAs} autoCapitalize="none" />
+        {served ? (
+          <FilledInput
+            label={`About how many ${served} from one ${unitWord}`}
+            value={perUnit}
+            onChangeText={setPerUnit}
+            keyboardType="decimal-pad"
+            hint="Rough is fine. You can change it later and every recipe follows."
+          />
+        ) : null}
+      </View>
+
+      {/* The answers read back, so a wrong number shows before saving */}
+      {summary.length ? (
+        <View style={styles.summary} accessibilityRole="summary">
+          {summary.map((line) => (
+            <Text key={line} style={styles.summaryLine}>
+              {line}
+            </Text>
+          ))}
+        </View>
+      ) : null}
+
       <PrimaryButton
         label="Create and add"
         disabled={!name.trim()}
-        onPress={() => onCreate({ name, unit, packSize, cost })}
+        onPress={() => onCreate({ name, unit, packSize, cost, portion })}
       />
     </ScrollView>
   )
@@ -387,6 +452,8 @@ const styles = StyleSheet.create({
   heading: { ...type.titleSm, color: colors.ink, flexShrink: 1 },
   section: { gap: space.sm },
   sectionTitle: { ...type.bodyStrong, color: colors.ink },
+  summary: { gap: space.xs, padding: space.lg, borderRadius: radius.sm, backgroundColor: colors.brandSoft },
+  summaryLine: { ...type.body, color: colors.ink },
   sectionHint: { ...type.caption, color: colors.muted },
   chips: { flexDirection: 'row', flexWrap: 'wrap', gap: space.sm },
   chip: {

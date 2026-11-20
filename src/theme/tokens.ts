@@ -32,8 +32,14 @@ export const colors = {
   quiet: '#5C5C56',
   /** Low-stock badge */
   danger: '#B42318',
-  /** Synced dot */
+  /** Critical badge background */
+  dangerSoft: '#FEE4E2',
+  /** Synced dot, success toast */
   success: '#157F3D',
+  /** Medium badge text */
+  warning: '#93370D',
+  /** Medium badge background */
+  warningSoft: '#FEF0C7',
   disabled: '#ECECE7',
 } as const
 
